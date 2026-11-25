@@ -294,6 +294,25 @@ async function main() {
     await gallery.getByRole('button',{name:'Frame 01',exact:true}).waitFor();
     await gallery.locator('#frames button img:not([hidden])').first().waitFor();
     assert.equal(await gallery.locator('#frames button').count(),50);
+    for (const [width,height] of [[320,568],[390,660],[412,915]]) {
+      await gallery.setViewportSize({width,height});
+      const layout = await gallery.evaluate(() => {
+        const bounds = selector => document.querySelector(selector).getBoundingClientRect();
+        const panel = bounds('#editor .panel');
+        const stage = bounds('.stage');
+        const header = bounds('#editor h2 + span');
+        const strip = document.querySelector('#frames');
+        return {
+          pageWidth:document.documentElement.scrollWidth,
+          centered:Math.abs((stage.left+stage.right)-(panel.left+panel.right))<1,
+          inBounds:stage.left>=panel.left && stage.right<=panel.right && header.right<=panel.right &&
+            strip.getBoundingClientRect().right<=panel.right,
+          stripScrolls:strip.scrollWidth>strip.clientWidth
+        };
+      });
+      assert.deepEqual(layout,{pageWidth:width,centered:true,inBounds:true,stripScrolls:true});
+    }
+    await gallery.setViewportSize({width:390,height:844});
     assert.equal(await gallery.getByRole('button',{name:'Legacy artwork'}).count(),0);
     assert.equal(await gallery.getByRole('button',{name:'Frame 01',exact:true}).getAttribute('aria-pressed'),'true');
     assert.ok(galleryTraffic.filter(req=>req.path.endsWith('/thumb.json')).length<12);
