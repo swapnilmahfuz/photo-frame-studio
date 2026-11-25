@@ -75,6 +75,13 @@ $('photo').onchange = async event => {
 $('zoom').oninput = event => { transform.zoom = Number(event.target.value); update(); };
 $('rotation').oninput = event => { transform.rotation = Number(event.target.value); update(); };
 $('reset').onclick = reset;
+$('toggleAdjustments').onclick = event => {
+  const control = event.currentTarget;
+  const expanded = control.getAttribute('aria-expanded') !== 'true';
+  control.setAttribute('aria-expanded',String(expanded));
+  control.textContent = expanded ? 'Hide adjustments' : 'Adjust photo';
+  $('photoAdjustments').dataset.expanded = String(expanded);
+};
 const pointers = new Map();
 function point(event) {
   const box = canvas.getBoundingClientRect();

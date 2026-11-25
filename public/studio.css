@@ -22,3 +22,17 @@ details[open]>summary{margin-bottom:12px}.brand{text-decoration:none;color:var(-
 select.campaign-picker{width:auto;max-width:100%}.frame-list button{font-size:.875rem}
 #session{margin-block:24px;max-width:600px}.file-preview{max-width:100%;width:160px}
 @media(max-width:440px){.bar{height:auto;min-height:58px;flex-wrap:wrap;padding-block:8px}}
+
+#toggleAdjustments{display:none}
+@media(max-width:720px){
+  #public .hero{padding-block:16px}
+  body:has(#public)>header{padding-top:env(safe-area-inset-top)}
+  #public .hero h1{font-size:clamp(1.85rem,7.5vw,2.65rem)}
+  #editor{padding-bottom:calc(88px + env(safe-area-inset-bottom))}
+  #editor .stage{width:min(100%,52svh);justify-self:center}
+  #editor .frame-feedback:empty,#editor .download-divider,#photoAdjustments[data-expanded="false"]{display:none}
+  #toggleAdjustments{display:inline-flex}
+  #photoAdjustments input[type=range]{margin:0;min-height:44px;touch-action:pan-y}
+  .download-actions{position:fixed;z-index:2;inset:auto 0 0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;background:#fff;border-top:1px solid var(--line);padding:10px max(14px,env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left))}
+  .download-actions button{min-height:48px;padding-inline:6px}
+}

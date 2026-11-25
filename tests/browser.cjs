@@ -174,6 +174,10 @@ async function main() {
     await move('touchMove',[touch(80,125,1),touch(190,125,2)]);
     await move('touchEnd',[]);
     assert.ok(Number(await mobile.locator('#zoom').inputValue())>1.3);
+    assert.equal(await mobile.getByRole('slider',{name:'Rotation'}).isVisible(),false);
+    assert.equal(await mobile.getByRole('button',{name:'Reset position'}).isVisible(),false);
+    await mobile.getByRole('button',{name:'Adjust photo'}).tap();
+    await mobile.getByRole('slider',{name:'Rotation'}).waitFor();
     await mobile.locator('#rotation').focus();
     await mobile.keyboard.press('ArrowRight');
     const zoom=await mobile.locator('#zoom').inputValue();
@@ -182,9 +186,18 @@ async function main() {
     await mobile.waitForFunction(()=>!document.querySelector('#png').disabled);
     assert.equal(await mobile.locator('#zoom').inputValue(),zoom);
     assert.equal(await mobile.locator('#rotation').inputValue(),rotation);
+    await mobile.getByRole('button',{name:'Hide adjustments'}).tap();
+    assert.equal(await mobile.getByRole('slider',{name:'Rotation'}).isVisible(),false);
+    await mobile.setViewportSize({width:320,height:568});
+    const preview = await mobile.locator('#canvas').boundingBox();
+    const downloadDock = await mobile.getByRole('group',{name:'Download photo'}).boundingBox();
+    assert.ok(preview.width <= 320 && preview.height <= 300);
+    assert.equal(Math.round(downloadDock.y+downloadDock.height),568);
     const requestCount=traffic.length;
     await download(mobile,'PNG');
     await download(mobile,'JPG');
+    assert.equal(await mobile.locator('#zoom').inputValue(),zoom);
+    assert.equal(await mobile.locator('#rotation').inputValue(),rotation);
     assert.equal(traffic.length,requestCount);
     assert.ok(traffic.every(x=>x.method==='GET' && x.bytes===0));
 
