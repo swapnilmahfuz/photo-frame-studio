@@ -133,7 +133,9 @@ async function main() {
       canvas.getContext('2d').drawImage(image,0,0,2048,2048);
       return canvas.toDataURL('image/png').split(',')[1];
     });
-    await admin.getByLabel('Add frame').setInputFiles({name:'large.png',mimeType:'image/png',buffer:Buffer.from(largeSquare,'base64')});
+    const singleChooser = admin.waitForEvent('filechooser');
+    await admin.getByRole('button',{name:'Add frames',exact:true}).click();
+    await (await singleChooser).setFiles({name:'large.png',mimeType:'image/png',buffer:Buffer.from(largeSquare,'base64')});
     await admin.getByText('Frame ready.',{exact:false}).waitFor();
     await admin.getByLabel('Frame name').nth(1).fill('Alternative');
     await admin.getByRole('button',{name:'Move up'}).nth(1).click();
@@ -241,7 +243,12 @@ async function main() {
       name:'Frame '+String(index+1).padStart(2,'0')+'.png',mimeType:'image/png',buffer:Buffer.from(bytes,'base64')
     }));
     breakUploadAt = bulkAttempt+3;
-    await admin.getByLabel('Add frame').setInputFiles(files);
+    const bulkChooser = admin.waitForEvent('filechooser');
+    await admin.getByRole('button',{name:'Add frames',exact:true}).focus();
+    await admin.keyboard.press('Enter');
+    const picker = await bulkChooser;
+    assert.ok(picker.isMultiple());
+    await picker.setFiles(files);
     await admin.getByText('50 frames ready.',{exact:false}).waitFor();
     await admin.getByRole('button',{name:'Publish',exact:true}).click();
     await admin.getByText('2 frame upload(s) saved to the draft. Upload failed for “Frame 03”.',{exact:false}).waitFor();

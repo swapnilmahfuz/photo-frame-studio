@@ -184,8 +184,10 @@ function render() {
   choices.onchange = () => { draft.defaultId = choices.value; markDirty(); };
   panel.append(title,slug,description,labeled('Default frame',choices),actions);
   const framePanel = el('section',null,{class:'panel stack'});
-  framePanel.append(el('h2','Frames ('+draft.frames.length+')'),el('p','Select one or more transparent square PNGs, up to 8 MB each. Full artwork renders at 1080 × 1080.'));
-  const upload = el('input',null,{type:'file',accept:'image/png',multiple:''});
+  const upload = el('input',null,{type:'file',accept:'image/png',multiple:'',hidden:''});
+  const frameHeader = el('div',null,{class:'row spread'});
+  frameHeader.append(el('h2','Frames ('+draft.frames.length+')'),button('Add frames',() => upload.click(),'primary'));
+  framePanel.append(frameHeader,el('p','Select one or more transparent square PNGs, up to 8 MB each. Full artwork renders at 1080 × 1080.'));
   upload.onchange = action(async () => {
     const files = Array.from(upload.files);
     const errors = [];
@@ -206,7 +208,7 @@ function render() {
       notice((added===1 ? 'Frame ready.' : added+' frames ready.')+' Save the draft to keep '+(added===1 ? 'it.' : 'them.'));
     }
   });
-  framePanel.append(labeled('Add frame',upload),...draft.frames.map(galleryRow));
+  framePanel.append(upload,...draft.frames.map(galleryRow));
   $('manage').replaceChildren(panel,framePanel);
 }
 
