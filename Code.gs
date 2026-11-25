@@ -83,7 +83,7 @@ function publicCatalog() {
   const frames = rows_(table_('Frames')).map(x => x.data).filter(x => x.enabled && !x.deleted);
   return campaigns.map(c => ({
     id:c.id,slug:c.slug,title:c.title,description:c.description,logo:!!c.logo,cover:!!c.cover,defaultId:c.defaultId,
-    frames:sorted_(frames.filter(f => f.campaign === c.id)).map(f => ({id:f.id,name:f.name}))
+    frames:sorted_(frames.filter(f => f.campaign === c.id)).map(f => ({id:f.id,name:f.name,hasThumbnail:!!f.thumbnail}))
   }));
 }
 
@@ -103,9 +103,9 @@ function adminAsset(campaignId, kind, frameId) {
 function asset_(campaign,kind,frameId,admin) {
   let file;
   if (kind === 'logo' || kind === 'cover') file = campaign[kind];
-  if (kind === 'frame') {
+  if (kind === 'frame' || kind === 'thumbnail') {
     const frame = rows_(table_('Frames')).find(({data:f}) => f.id === frameId && f.campaign === campaign.id && !f.deleted && (admin || f.enabled));
-    file = frame && frame.data.file;
+    file = frame && frame.data[kind === 'thumbnail' ? 'thumbnail' : 'file'];
   }
   if (!file) throw Error('Image unavailable.');
   const blob = DriveApp.getFileById(file).getBlob();
@@ -132,7 +132,7 @@ function recordExport(campaignId,frameId,eventId) {
 function adminState() {
   owner_();
   const campaigns = rows_(table_('Campaigns')).map(({data:c}) => ({...c,logo:!!c.logo,cover:!!c.cover}));
-  const frames = sorted_(rows_(table_('Frames')).map(x => x.data)).map(({file,events,...f}) => f);
+  const frames = sorted_(rows_(table_('Frames')).map(x => x.data)).map(({file,events,thumbnail,...f}) => ({...f,hasThumbnail:!!thumbnail}));
   return {campaigns,frames,url:props().getProperty('PUBLIC_URL') || ''};
 }
 
@@ -196,12 +196,51 @@ function saveFrame(input) {
       throw Error('Disable the campaign before removing its last enabled frame.');
     }
     const update = {row:row && row.row,data:{...existing,name,order,enabled,deleted:input.delete === true}};
-    if (input.image || update.data.deleted) replaceAsset_(sheet,update,'file',input.image,true);
+    if (input.image || update.data.deleted) replaceFrameAssets_(sheet,update,input);
     else write_(sheet,update.row,update.data);
     if (!enabled && campaign.data.defaultId === existing.id) {
       campaign.data.defaultId = '';
       write_(campaigns,campaign.row,campaign.data);
     }
+  });
+}
+
+function replaceFrameAssets_(sheet,row,input) {
+  const previous = [row.data.file,row.data.thumbnail];
+  const next = [];
+  try {
+    if (!row.data.deleted && input.image) {
+      next.push(storeImage_(input.image,true));
+      if (input.thumbnail) next.push(storeImage_(input.thumbnail,true,240));
+    }
+    row.data.file = next[0] || '';
+    row.data.thumbnail = next[1] || '';
+    row.data.revision = key_();
+    write_(sheet,row.row,row.data);
+    SpreadsheetApp.flush();
+  } catch (error) {
+    next.forEach(trash_);
+    throw error;
+  }
+  previous.filter(Boolean).forEach(trash_);
+}
+
+function saveMissingThumbnail(campaignId,frameId,revision,image) {
+  owner_();
+  return locked_(() => {
+    const sheet = table_('Frames');
+    const row = rows_(sheet).find(({data:f}) => f.campaign === campaignId && f.id === frameId && !f.deleted);
+    if (!row || row.data.thumbnail || (row.data.revision || '') !== revision) return false;
+    const thumbnail = storeImage_(image,true,240);
+    try {
+      row.data.thumbnail = thumbnail;
+      write_(sheet,row.row,row.data);
+      SpreadsheetApp.flush();
+    } catch (error) {
+      trash_(thumbnail);
+      throw error;
+    }
+    return true;
   });
 }
 
@@ -224,7 +263,7 @@ function field_(value,max,optional) {
   return text;
 }
 
-function storeImage_(data,frame) {
+function storeImage_(data,frame,thumbnailSize) {
   const match = typeof data === 'string' && data.length <= Math.ceil(LIMIT/3)*4+40 &&
     data.match(/^data:(image\/(?:png|jpeg));base64,([A-Za-z0-9+/=]+)$/);
   if (!match) throw Error(frame ? 'Choose a square PNG frame with transparency (up to 8 MB).' : 'Choose a PNG or JPG up to 8 MB.');
@@ -235,6 +274,7 @@ function storeImage_(data,frame) {
   const u32 = i => b(i)*16777216 + b(i+1)*65536 + b(i+2)*256 + b(i+3);
   if (bytes.length > LIMIT || !(match[1] === 'image/png' ? png : jpeg)) throw Error('Invalid image file.');
   if (frame && (!png || !u32(16) || u32(16) !== u32(20) || b(25) !== 6)) throw Error('Use a square PNG frame with transparency.');
+  if (thumbnailSize && u32(16) !== thumbnailSize) throw Error('Invalid thumbnail dimensions.');
   const extension = png ? '.png' : '.jpg';
   return DriveApp.getFolderById(props().getProperty('FOLDER')).createFile(Utilities.newBlob(bytes,match[1],key_()+extension)).getId();
 }

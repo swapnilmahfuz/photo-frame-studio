@@ -16,7 +16,8 @@ button,.button{display:inline-flex;justify-content:center;align-items:center;gap
 .panel{background:#fff;border:1px solid var(--line);border-radius:18px;padding:20px;min-width:0}.stack{display:grid;gap:14px}.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.spread{justify-content:space-between}
 .stage{position:relative;background:#e4ece3;border-radius:12px;overflow:hidden;aspect-ratio:1}.stage canvas{display:block;width:100%;height:100%;touch-action:none;cursor:grab}.stage canvas:active{cursor:grabbing}
 .hint{position:absolute;inset:28% 14%;display:grid;place-content:center;text-align:center;pointer-events:none;color:var(--muted);font-weight:650}.muted{font-size:.88rem;color:var(--muted);line-height:1.5}.status{min-height:1.5em;margin:9px 0}.error{color:#9d2b36}
-.frame-list{display:flex;gap:8px;overflow-x:auto;padding:5px 4px}.frame-list button{white-space:nowrap}.frame-list button[aria-pressed=true]{background:#e3efe6;border-color:var(--green)}
+#editor{grid-template-columns:minmax(0,1.6fr) minmax(0,1fr)}.preview-layout{display:grid;grid-template-columns:minmax(0,1fr) 96px;gap:12px;align-items:start}.gallery{position:relative;align-self:stretch}.frame-list{position:absolute;inset:0;display:flex;flex-direction:column;gap:7px;overflow:auto;padding:4px}.frame-list button{flex:none;display:grid;gap:3px;padding:4px;min-width:0;text-align:center;font-size:.75rem;overflow-wrap:anywhere}.frame-list button[aria-pressed=true]{box-shadow:0 0 0 2px var(--green);background:#e3efe6}.frame-thumb{position:relative;display:grid;place-items:center;aspect-ratio:1;width:100%;border-radius:6px;background:repeating-conic-gradient(#e0e6dd 0% 25%,#f4f5ee 0% 50%) 0/16px 16px}.frame-thumb img{position:absolute;width:100%;height:100%;object-fit:contain}.frame-thumb small{padding:4px}.frame-feedback{min-height:1.25em}
+@media(max-width:720px){#editor,.preview-layout{grid-template-columns:1fr}.frame-list{position:static;flex-direction:row}.frame-list button{width:84px}}
 label:not(.button){display:grid;gap:5px;font-weight:600}label.check{display:flex;align-items:center;gap:8px}input:not([type=range],[type=checkbox],[type=file]),select,textarea{width:100%;border:1px solid var(--line);border-radius:8px;padding:9px;color:var(--ink);background:#fff;min-height:42px}textarea{resize:vertical}input[type=range]{width:100%;accent-color:var(--green)}input[type=file]{max-width:100%}
 hr{border:0;border-top:1px solid var(--line);margin:0}.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.frame-preview{width:min(100%,240px);border-radius:10px;background:repeating-conic-gradient(#e0e6dd 0% 25%,#f4f5ee 0% 50%) 0/22px 22px}.campaign-nav{display:flex;gap:8px;flex-wrap:wrap}.campaign-nav button[aria-current=true]{background:#e3efe6}.frame-admin{padding:14px;border:1px solid var(--line);border-radius:12px}.admin-title{font-size:clamp(2rem,5vw,3.5rem)}.count{font-size:1.5rem;font-weight:700}
 @media(max-width:720px){main,.bar{padding-inline:15px}.layout{grid-template-columns:1fr;gap:12px}.panel{padding:14px}.hero{padding-top:20px}.bar{height:58px}.form-grid{grid-template-columns:1fr}}
@@ -31,12 +32,11 @@ hr{border:0;border-top:1px solid var(--line);margin:0}.form-grid{display:grid;gr
 <div class="hero"><img id="cover" class="cover" alt="" hidden><img id="logo" class="logo" alt="" hidden><h1 id="title"></h1><p id="description"></p></div>
 <div id="editor" class="layout" hidden>
 <section class="panel stack"><div class="row spread"><h2>Live preview</h2><span class="muted">1080 × 1080</span></div>
-<div class="stage"><canvas id="canvas" width="1080" height="1080" aria-label="Framed photo preview"></canvas><div id="hint" class="hint">Choose a photo to start</div></div>
+<div class="preview-layout"><div class="stage"><canvas id="canvas" width="1080" height="1080" aria-label="Framed photo preview"></canvas><div id="hint" class="hint">Choose a photo to start</div></div><div class="gallery"><div class="frame-list" id="frames" role="group" aria-label="Frames"></div></div></div><div id="frameFeedback" class="frame-feedback muted" role="status"></div>
 <div class="muted">Drag to position. Pinch or use the zoom slider to resize.</div></section>
 <section class="panel stack"><h2>Make it yours</h2>
 <button id="choosePhoto" class="primary" type="button">Choose photo</button><input id="photo" type="file" accept="image/*" hidden>
 <div class="muted" id="privacy">Your photo stays on this device.</div><hr>
-<div><strong>Frame</strong><div class="frame-list" id="frames" aria-label="Frames"></div></div>
 <label>Zoom <input id="zoom" type="range" min=".25" max="5" step=".01" value="1"></label>
 <label>Rotation <input id="rotation" type="range" min="-180" max="180" step="1" value="0"></label>
 <button id="reset" class="ghost">Reset position</button><hr>
@@ -109,32 +109,129 @@ function paint(target = ctx, jpeg = false) {
   if (overlay) target.drawImage(overlay,0,0,size,size);
 }
 function update() {
-  $('hint').hidden = !!photo;
+  $('hint').hidden = !!photo || !!overlay;
   $('zoom').value = transform.zoom;
   $('rotation').value = transform.rotation;
   $('png').disabled = $('jpg').disabled = !(photo && overlay);
   paint();
 }
 function reset() { transform = {x:0,y:0,zoom:1,rotation:0}; update(); }
+const artwork = new Map();
+const thumbnails = new Map();
+const requests = [];
+let activeRequests = 0;
+function drainRequests() {
+  while (activeRequests < 2 && requests.length) {
+    const entry = requests.shift();
+    if (!entry.valid()) {
+      entry.reject(Error('Campaign changed.'));
+      continue;
+    }
+    activeRequests++;
+    entry.work().then(entry.resolve,entry.reject).finally(() => {
+      activeRequests--;
+      drainRequests();
+    });
+  }
+}
+function queuedAsset(cache,key,work,valid,priority = false) {
+  let entry = cache.get(key);
+  if (entry && priority) {
+    const index = requests.indexOf(entry);
+    if (index >= 0) {
+      requests.splice(index,1);
+      entry.valid = valid;
+      requests.unshift(entry);
+      drainRequests();
+    }
+  }
+  if (entry) {
+    cache.delete(key);
+    cache.set(key,entry);
+    return entry.promise;
+  }
+  entry = {work,valid};
+  entry.promise = new Promise((resolve,reject) => Object.assign(entry,{resolve,reject})).then(value => {
+    entry.ready = true;
+    if (cache === artwork && cache.size > 16) {
+      for (const [id,candidate] of cache) {
+        if (candidate.ready && id !== frame?.id && id !== key) cache.delete(id);
+        if (cache.size <= 16) break;
+      }
+    }
+    return value;
+  }).catch(error => {
+    if (cache.get(key) === entry) cache.delete(key);
+    throw error;
+  });
+  cache.set(key,entry);
+  if (priority) requests.unshift(entry);
+  else requests.push(entry);
+  drainRequests();
+  return entry.promise;
+}
+function frameImage(c,item,valid,priority) {
+  return queuedAsset(artwork,item.id,async () => {
+    const src = await rpc('publicAsset',c.id,'frame',item.id);
+    return decode(src);
+  },valid,priority);
+}
+function thumbnailFrom(image) {
+  const surface = document.createElement('canvas');
+  surface.width = surface.height = 240;
+  const brush = surface.getContext('2d');
+  brush.imageSmoothingQuality = 'high';
+  brush.drawImage(image,0,0,240,240);
+  return surface.toDataURL('image/png');
+}
+async function showThumbnail(c,item,valid) {
+  const card = [...$('frames').children].find(el => el.dataset.id === item.id);
+  if (!card) return;
+  const badge = card.querySelector('small');
+  try {
+    let src;
+    if (item.hasThumbnail) {
+      src = await queuedAsset(thumbnails,item.id,async () => {
+        const image = await decode(await rpc('publicAsset',c.id,'thumbnail',item.id));
+        return image.src;
+      },() => campaign === c);
+    } else {
+      src = await frameImage(c,item,() => campaign === c).then(image => {
+        if (!thumbnails.has(item.id)) thumbnails.set(item.id,{promise:Promise.resolve(thumbnailFrom(image))});
+        return thumbnails.get(item.id).promise;
+      });
+    }
+    if (!valid()) return;
+    card.querySelector('img').src = src;
+    card.querySelector('img').hidden = false;
+    badge.hidden = true;
+  } catch (error) {
+    if (valid()) badge.textContent = 'Preview unavailable';
+  }
+}
 async function selectFrame(item) {
   const request = ++frameRequest;
   frame = item;
   overlay = null;
   update();
   for (const el of $('frames').children) el.setAttribute('aria-pressed',String(el.dataset.id === item.id));
-  notice('Loading frame…');
+  const current = campaign;
+  $('frameFeedback').textContent = 'Loading frame…';
   try {
-    const loaded = await decode(await rpc('publicAsset',campaign.id,'frame',item.id));
+    const loaded = await frameImage(current,item,() => campaign === current,true);
     if (request !== frameRequest) return;
     overlay = loaded;
-    notice('');
+    $('frameFeedback').textContent = '';
     update();
-  } catch (error) { if (request === frameRequest) fail(error); }
+  } catch (error) {
+    if (request === frameRequest) $('frameFeedback').textContent = 'Frame unavailable. Select it again to retry.';
+  }
 }
 async function selectCampaign(item) {
   const request = ++campaignRequest;
   ++frameRequest;
   campaign = item;
+  notice('');
   overlay = null;
   frame = null;
   for (const el of $('campaigns').children) el.setAttribute('aria-current',String(el.dataset.id === item.id));
@@ -152,13 +249,28 @@ async function selectCampaign(item) {
     }).catch(() => {});
   }
   $('frames').replaceChildren(...item.frames.map(f => {
-    const el = button(f.name,() => selectFrame(f));
+    const el = button(null,() => {
+      selectFrame(f);
+      if (el.querySelector('img').hidden) showThumbnail(item,f,() => campaign === item);
+    });
+    const thumb = node('span',null,{class:'frame-thumb','aria-hidden':'true'});
+    thumb.append(node('img',null,{alt:'',hidden:''}),node('small','Loading…'));
+    el.append(thumb,node('span',f.name));
     el.dataset.id = f.id;
     return el;
   }));
   const first = item.frames.find(f => f.id === item.defaultId) || item.frames[0];
-  if (first) await selectFrame(first);
-  else notice('This campaign has no available frames.');
+  if (!first) { notice('This campaign has no available frames.'); return; }
+  const valid = () => request === campaignRequest;
+  const initial = selectFrame(first);
+  const gallery = [first,...item.frames.filter(f => f !== first)];
+  const previews = gallery.map(f => showThumbnail(item,f,valid));
+  await initial;
+  await Promise.all(previews);
+  if (valid()) {
+    // Warm the next choices without fetching every full-resolution image in large campaigns.
+    gallery.slice(1,9).forEach(f => frameImage(item,f,valid).catch(() => {}));
+  }
 }
 let photoRequest = 0;
 $('choosePhoto').onclick = () => { $('photo').value = ''; $('photo').click(); };
@@ -356,7 +468,7 @@ function frameEditor(c,f,nextOrder) {
   form.append(node('button',f ? 'Save frame' : 'Add frame',{class:'primary'}));
   submit(form,async () => {
     const data = await readFile(image.field.files[0],true);
-    await rpc('saveFrame',{id:f?.id || '',campaign:c.id,name:name.field.value,order:order.field.value,enabled:enabled.field.checked,image:data});
+    await rpc('saveFrame',{id:f?.id || '',campaign:c.id,name:name.field.value,order:order.field.value,enabled:enabled.field.checked,image:data,thumbnail:data ? thumbnailFrom(await decode(data)) : ''});
     await refresh();
   },'Frame saved.');
   return form;
@@ -424,6 +536,22 @@ async function refresh() {
   $('publicUrl').value = state.url;
   renderAdmin();
 }
+async function fillExistingThumbnails() {
+  const pending = state.frames.filter(f => !f.deleted && !f.hasThumbnail);
+  const worker = async () => {
+    for (;;) {
+      const f = pending.shift();
+      if (!f) return;
+      try {
+        const image = await decode(await rpc('adminAsset',f.campaign,'frame',f.id));
+        await rpc('saveMissingThumbnail',f.campaign,f.id,f.revision || '',thumbnailFrom(image));
+      } catch (error) {
+        console.warn('A frame thumbnail could not be generated.',f.id,error.message);
+      }
+    }
+  };
+  await Promise.all([worker(),worker()]);
+}
 async function init() {
   if (boot.mode === 'denied') { notice('Sign in with the owner account and open the owner-only dashboard URL.',true); return; }
   if (boot.mode === 'admin') {
@@ -431,6 +559,7 @@ async function init() {
     $('newCampaign').onclick = () => { selectedId = ''; renderAdmin(); };
     submit($('urlForm'),async () => { await rpc('setPublicUrl',$('publicUrl').value); await refresh(); },'Public URL saved.');
     await refresh();
+    fillExistingThumbnails();
     return;
   }
   catalog = await rpc('publicCatalog');
