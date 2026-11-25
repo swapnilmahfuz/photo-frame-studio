@@ -1,0 +1,17 @@
+{
+  "name": "kuet-photo-frame-studio",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "node --check public/studio.js && node --check public/admin.js && node --check public/firebase-data.js",
+    "test:rules": "firebase emulators:exec --only firestore,database --project demo-photo-frame-studio 'node tests/firebase-rules.cjs'",
+    "test:browser": "firebase emulators:exec --only firestore,database --project demo-photo-frame-studio 'node tests/browser.cjs'"
+  },
+  "devDependencies": {
+    "@firebase/util": "^1.15.3",
+    "@firebase/rules-unit-testing": "^5.0.0",
+    "firebase": "^12.13.0",
+    "firebase-tools": "^15.0.0",
+    "playwright": "^1.58.0"
+  }
+}

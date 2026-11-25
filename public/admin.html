@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Super Admin | Photo Frame Studio</title>
+<link rel="stylesheet" href="/studio.css">
+</head>
+<body>
+<header><div class="bar"><a class="brand" href="/">Photo Frame Studio</a><button id="signOut" hidden>Sign out</button></div></header>
+<main>
+<div class="hero"><h1 class="admin-title">Super Admin</h1></div>
+<p id="status" class="status" role="status" aria-live="polite">Connecting to Firebase…</p>
+<section id="session" class="panel stack" hidden>
+  <h2>Owner sign-in</h2>
+  <button id="signIn" class="primary">Continue with Google</button>
+</section>
+<div id="dashboard" class="layout" hidden>
+  <aside class="panel stack">
+    <h2>Campaigns</h2>
+    <label>Manage campaign<select id="campaigns"></select></label>
+    <button id="newCampaign">New campaign</button>
+    <button id="starter" hidden>Load KUET starter artwork</button>
+    <details><summary>Import a legacy campaign</summary>
+      <label>Campaign export (.json)<input type="file" id="importFile" accept=".json,application/json"></label>
+    </details>
+  </aside>
+  <section id="manage" class="stack"></section>
+</div>
+</main>
+<script type="module" src="/admin.js"></script>
+</body>
+</html>

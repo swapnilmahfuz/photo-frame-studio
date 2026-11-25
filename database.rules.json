@@ -1,0 +1,31 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "visibility": {
+      "$campaign": {
+        ".read": "auth != null && auth.token.email === 'swapnilmahfuz20@gmail.com' && auth.token.email_verified === true && auth.token.firebase.sign_in_provider === 'google.com'",
+        ".write": "auth != null && auth.token.email === 'swapnilmahfuz20@gmail.com' && auth.token.email_verified === true && auth.token.firebase.sign_in_provider === 'google.com'"
+      }
+    },
+    "locks": {
+      "$campaign": {
+        ".read": "auth != null && auth.token.email === 'swapnilmahfuz20@gmail.com' && auth.token.email_verified === true && auth.token.firebase.sign_in_provider === 'google.com'",
+        ".write": "auth != null && auth.token.email === 'swapnilmahfuz20@gmail.com' && auth.token.email_verified === true && auth.token.firebase.sign_in_provider === 'google.com'"
+      }
+    },
+    "art": {
+      "$campaign": {
+        "$frame": {
+          "$version": {
+            ".write": "auth != null && auth.token.email === 'swapnilmahfuz20@gmail.com' && auth.token.email_verified === true && auth.token.firebase.sign_in_provider === 'google.com'",
+            "$size": {
+              ".read": "(auth != null && auth.token.email === 'swapnilmahfuz20@gmail.com' && auth.token.email_verified === true && auth.token.firebase.sign_in_provider === 'google.com') || root.child('visibility').child($campaign).child('frames').child($frame).val() === $version",
+              ".validate": "($size === 'thumb' || $size === 'full') && newData.isString() && newData.val().length <= 8388608 && newData.val().matches(/^data:image\\/png;base64,[A-Za-z0-9+\\/=]+$/)"
+            }
+          }
+        }
+      }
+    }
+  }
+}

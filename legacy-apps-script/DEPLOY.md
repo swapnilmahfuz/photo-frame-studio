@@ -8,9 +8,9 @@ Open each link and copy the full file into the matching location in the Apps Scr
 
 | File to copy | Where it goes |
 | --- | --- |
-| [Code.gs](https://raw.githubusercontent.com/swapnilmahfuz/photo-frame-studio/main/Code.gs) | Replace the contents of the default `Code.gs` script file. This includes the setup function and the Emerald & Gold starter frame. |
-| [Index.html](https://raw.githubusercontent.com/swapnilmahfuz/photo-frame-studio/main/Index.html) | In **Editor → Add a file → HTML**, name the file `Index` and paste the contents. |
-| [appsscript.json](https://raw.githubusercontent.com/swapnilmahfuz/photo-frame-studio/main/appsscript.json) | In **Project Settings**, enable **Show “appsscript.json” manifest file in editor**. Return to **Editor**, open that file, and replace its contents. |
+| [Code.gs](https://raw.githubusercontent.com/swapnilmahfuz/photo-frame-studio/main/legacy-apps-script/Code.gs) | Replace the contents of the default `Code.gs` script file. This includes the setup function and the Emerald & Gold starter frame. |
+| [Index.html](https://raw.githubusercontent.com/swapnilmahfuz/photo-frame-studio/main/legacy-apps-script/Index.html) | In **Editor → Add a file → HTML**, name the file `Index` and paste the contents. |
+| [appsscript.json](https://raw.githubusercontent.com/swapnilmahfuz/photo-frame-studio/main/legacy-apps-script/appsscript.json) | In **Project Settings**, enable **Show “appsscript.json” manifest file in editor**. Return to **Editor**, open that file, and replace its contents. |
 
 ## Run setup before deploying
 

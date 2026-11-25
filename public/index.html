@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Photo Frame Studio</title>
+<link rel="stylesheet" href="/studio.css">
+</head>
+<body>
+<header><div class="bar"><a class="brand" href="/"><span class="mark" aria-hidden="true">▣</span>Photo Frame Studio</a><button id="share" class="ghost" hidden>Copy campaign link</button></div></header>
+<main>
+<p id="status" class="status" role="status" aria-live="polite"></p>
+<section id="public">
+<button id="browse" type="button" class="ghost">Browse campaigns</button><select id="campaigns" class="campaign-picker" aria-label="Campaigns" hidden></select>
+<div class="hero"><h1 id="title">KUET 4th Convocation 2027</h1><p id="description"></p></div>
+<div id="editor" class="layout">
+<section class="panel stack"><div class="row spread"><h2>Live preview</h2><span class="muted">1080 × 1080</span></div>
+<div class="preview-layout"><div class="stage"><canvas id="canvas" width="1080" height="1080" aria-label="Framed photo preview"></canvas><div id="hint" class="hint">Choose a photo to start</div></div><div class="gallery"><div class="frame-list" id="frames" role="group" aria-label="Frames"></div></div></div><div id="frameFeedback" class="frame-feedback muted" role="status"></div>
+<div class="muted">Drag to position. Pinch or use the zoom slider to resize.</div></section>
+<section class="panel stack"><h2>Make it yours</h2>
+<button id="choosePhoto" class="primary" type="button">Choose photo</button><input id="photo" type="file" accept="image/*" hidden>
+<div class="muted" id="privacy">Your photo stays on this device.</div><hr>
+<label>Zoom <input id="zoom" type="range" min=".25" max="5" step=".01" value="1"></label>
+<label>Rotation <input id="rotation" type="range" min="-180" max="180" step="1" value="0"></label>
+<button id="reset" class="ghost">Reset position</button><hr>
+<div class="row"><button id="png" class="primary" disabled>Download PNG</button><button id="jpg" disabled>Download JPG</button></div>
+</section></div>
+</section>
+</main>
+<script type="module" src="/studio.js"></script>
+</body>
+</html>
