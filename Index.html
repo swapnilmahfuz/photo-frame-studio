@@ -1,0 +1,451 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<base target="_top">
+<style>
+:root{color-scheme:light;--ink:#142d25;--green:#124f3b;--paper:#f4f5ee;--line:#dce3d9;--muted:#51665c;font:16px system-ui,sans-serif}
+*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink)}[hidden]{display:none!important}
+header{border-bottom:1px solid var(--line);background:#fff}main,.bar{max-width:1120px;margin:auto;padding:0 24px}.bar{height:68px;display:flex;align-items:center;justify-content:space-between;gap:16px}
+.brand{font-weight:800;letter-spacing:-.035em}.mark{display:inline-grid;place-items:center;width:32px;height:32px;margin-right:9px;border-radius:9px;background:var(--green);color:white}
+h1{font:normal clamp(2.35rem,6vw,4.8rem)/.98 Georgia,serif;letter-spacing:-.055em;margin:.24em 0}h2{margin:0 0 12px;letter-spacing:-.035em}p{color:var(--muted);line-height:1.55}button,input,select,textarea{font:inherit}
+button,.button{display:inline-flex;justify-content:center;align-items:center;gap:6px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--ink);padding:10px 14px;min-height:44px;cursor:pointer;text-decoration:none;font-weight:650}button:disabled{opacity:.45;cursor:default}.primary{background:var(--green);border-color:var(--green);color:white}.danger{color:#9d2b36}.ghost{background:transparent}
+:focus-visible{outline:3px solid #ae7a23;outline-offset:3px}
+.hero{padding:32px 0 24px}.hero p{margin:.7em 0 0}.cover{display:block;width:100%;max-height:220px;object-fit:cover;border-radius:18px}.logo{height:52px;width:52px;object-fit:contain;margin-bottom:8px}
+.layout{display:grid;grid-template-columns:minmax(0,1.16fr) minmax(0,1fr);gap:24px;align-items:start;padding-bottom:40px}
+.panel{background:#fff;border:1px solid var(--line);border-radius:18px;padding:20px;min-width:0}.stack{display:grid;gap:14px}.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.spread{justify-content:space-between}
+.stage{position:relative;background:#e4ece3;border-radius:12px;overflow:hidden;aspect-ratio:1}.stage canvas{display:block;width:100%;height:100%;touch-action:none;cursor:grab}.stage canvas:active{cursor:grabbing}
+.hint{position:absolute;inset:28% 14%;display:grid;place-content:center;text-align:center;pointer-events:none;color:var(--muted);font-weight:650}.muted{font-size:.88rem;color:var(--muted);line-height:1.5}.status{min-height:1.5em;margin:9px 0}.error{color:#9d2b36}
+.frame-list{display:flex;gap:8px;overflow-x:auto;padding:5px 4px}.frame-list button{white-space:nowrap}.frame-list button[aria-pressed=true]{background:#e3efe6;border-color:var(--green)}
+label:not(.button){display:grid;gap:5px;font-weight:600}label.check{display:flex;align-items:center;gap:8px}input:not([type=range],[type=checkbox],[type=file]),select,textarea{width:100%;border:1px solid var(--line);border-radius:8px;padding:9px;color:var(--ink);background:#fff;min-height:42px}textarea{resize:vertical}input[type=range]{width:100%;accent-color:var(--green)}input[type=file]{max-width:100%}
+hr{border:0;border-top:1px solid var(--line);margin:0}.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.frame-preview{width:min(100%,240px);border-radius:10px;background:repeating-conic-gradient(#e0e6dd 0% 25%,#f4f5ee 0% 50%) 0/22px 22px}.campaign-nav{display:flex;gap:8px;flex-wrap:wrap}.campaign-nav button[aria-current=true]{background:#e3efe6}.frame-admin{padding:14px;border:1px solid var(--line);border-radius:12px}.admin-title{font-size:clamp(2rem,5vw,3.5rem)}.count{font-size:1.5rem;font-weight:700}
+@media(max-width:720px){main,.bar{padding-inline:15px}.layout{grid-template-columns:1fr;gap:12px}.panel{padding:14px}.hero{padding-top:20px}.bar{height:58px}.form-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header><div class="bar"><div class="brand"><span class="mark" aria-hidden="true">▣</span>Photo Frame Studio</div><button id="share" class="ghost" hidden>Copy campaign link</button></div></header>
+<main>
+<p id="status" class="status" role="status" aria-live="polite"></p>
+<section id="public" hidden>
+<nav id="campaigns" class="campaign-nav" aria-label="Campaigns"></nav>
+<div class="hero"><img id="cover" class="cover" alt="" hidden><img id="logo" class="logo" alt="" hidden><h1 id="title"></h1><p id="description"></p></div>
+<div id="editor" class="layout" hidden>
+<section class="panel stack"><div class="row spread"><h2>Live preview</h2><span class="muted">1080 × 1080</span></div>
+<div class="stage"><canvas id="canvas" width="1080" height="1080" aria-label="Framed photo preview"></canvas><div id="hint" class="hint">Choose a photo to start</div></div>
+<div class="muted">Drag to position. Pinch or use the zoom slider to resize.</div></section>
+<section class="panel stack"><h2>Make it yours</h2>
+<button id="choosePhoto" class="primary" type="button">Choose photo</button><input id="photo" type="file" accept="image/*" hidden>
+<div class="muted" id="privacy">Your photo stays on this device.</div><hr>
+<div><strong>Frame</strong><div class="frame-list" id="frames" aria-label="Frames"></div></div>
+<label>Zoom <input id="zoom" type="range" min=".25" max="5" step=".01" value="1"></label>
+<label>Rotation <input id="rotation" type="range" min="-180" max="180" step="1" value="0"></label>
+<button id="reset" class="ghost">Reset position</button><hr>
+<div class="row"><button id="png" class="primary" disabled>Download PNG</button><button id="jpg" disabled>Download JPG</button></div>
+</section></div>
+</section>
+<section id="admin" hidden>
+<div class="hero"><h1 class="admin-title">Campaign dashboard</h1><p>Manage campaign content, artwork and generation counts.</p></div>
+<div class="layout">
+<aside class="panel stack"><h2>Campaigns</h2><nav id="adminNav" class="stack" aria-label="Manage campaigns"></nav><button id="newCampaign">New campaign</button><hr>
+<form id="urlForm" class="stack"><label>Public web app URL<input id="publicUrl" required type="url" placeholder="https://script.google.com/…/exec"></label><button>Save public URL</button></form></aside>
+<section id="manage" class="stack"></section>
+</div></section>
+</main>
+<script>
+'use strict';
+const boot = <?!= boot ?>;
+const $ = id => document.getElementById(id);
+const rpc = (method,...args) => new Promise((resolve,reject) => {
+  google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[method](...args);
+});
+function notice(message, error = false) {
+  $('status').textContent = message;
+  $('status').classList.toggle('error',error);
+}
+function fail(error) { notice(error.message || String(error),true); }
+function node(tag,text,attrs = {}) {
+  const el = document.createElement(tag);
+  if (text != null) el.textContent = text;
+  Object.entries(attrs).forEach(([name,value]) => el.setAttribute(name,value));
+  return el;
+}
+function button(text,action,cls = '') {
+  const el = node('button',text,{type:'button',class:cls});
+  el.onclick = action;
+  return el;
+}
+function decode(src) {
+  return new Promise((resolve,reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(Error('This image could not be opened.'));
+    image.src = src;
+  });
+}
+async function copy(link) {
+  try { await navigator.clipboard.writeText(link); notice('Campaign link copied.'); }
+  catch (error) { window.prompt('Copy this campaign link',link); }
+}
+function linkFor(base,c) { return base + '?campaign=' + encodeURIComponent(c.slug); }
+
+const canvas = $('canvas');
+const ctx = canvas.getContext('2d');
+const size = canvas.width;
+let campaign, frame, photo, overlay, catalog = [], frameRequest = 0, campaignRequest = 0;
+let transform = {x:0,y:0,zoom:1,rotation:0};
+function paint(target = ctx, jpeg = false) {
+  target.clearRect(0,0,size,size);
+  if (jpeg) { target.fillStyle = '#fff'; target.fillRect(0,0,size,size); }
+  if (photo) {
+    const scale = Math.max(size/photo.naturalWidth,size/photo.naturalHeight)*transform.zoom;
+    const w = photo.naturalWidth*scale;
+    const h = photo.naturalHeight*scale;
+    target.save();
+    target.translate(size/2+transform.x,size/2+transform.y);
+    target.rotate(transform.rotation*Math.PI/180);
+    target.drawImage(photo,-w/2,-h/2,w,h);
+    target.restore();
+  }
+  if (overlay) target.drawImage(overlay,0,0,size,size);
+}
+function update() {
+  $('hint').hidden = !!photo;
+  $('zoom').value = transform.zoom;
+  $('rotation').value = transform.rotation;
+  $('png').disabled = $('jpg').disabled = !(photo && overlay);
+  paint();
+}
+function reset() { transform = {x:0,y:0,zoom:1,rotation:0}; update(); }
+async function selectFrame(item) {
+  const request = ++frameRequest;
+  frame = item;
+  overlay = null;
+  update();
+  for (const el of $('frames').children) el.setAttribute('aria-pressed',String(el.dataset.id === item.id));
+  notice('Loading frame…');
+  try {
+    const loaded = await decode(await rpc('publicAsset',campaign.id,'frame',item.id));
+    if (request !== frameRequest) return;
+    overlay = loaded;
+    notice('');
+    update();
+  } catch (error) { if (request === frameRequest) fail(error); }
+}
+async function selectCampaign(item) {
+  const request = ++campaignRequest;
+  ++frameRequest;
+  campaign = item;
+  overlay = null;
+  frame = null;
+  for (const el of $('campaigns').children) el.setAttribute('aria-current',String(el.dataset.id === item.id));
+  $('title').textContent = item.title;
+  $('description').textContent = item.description;
+  $('editor').hidden = !item.frames.length;
+  $('share').hidden = !boot.url;
+  $('share').onclick = () => copy(linkFor(boot.url,item));
+  for (const kind of ['logo','cover']) {
+    $(kind).hidden = true;
+    if (item[kind]) rpc('publicAsset',item.id,kind).then(src => {
+      if (request !== campaignRequest) return;
+      $(kind).src = src;
+      $(kind).hidden = false;
+    }).catch(() => {});
+  }
+  $('frames').replaceChildren(...item.frames.map(f => {
+    const el = button(f.name,() => selectFrame(f));
+    el.dataset.id = f.id;
+    return el;
+  }));
+  const first = item.frames.find(f => f.id === item.defaultId) || item.frames[0];
+  if (first) await selectFrame(first);
+  else notice('This campaign has no available frames.');
+}
+let photoRequest = 0;
+$('choosePhoto').onclick = () => { $('photo').value = ''; $('photo').click(); };
+$('photo').onchange = async event => {
+  const file = event.target.files[0];
+  if (!file) return;
+  const request = ++photoRequest;
+  const url = URL.createObjectURL(file);
+  try {
+    const image = await decode(url);
+    if (request !== photoRequest) return;
+    photo = image;
+    reset();
+  } catch (error) { if (request === photoRequest) fail(error); }
+  finally { URL.revokeObjectURL(url); }
+};
+$('zoom').oninput = event => { transform.zoom = Number(event.target.value); update(); };
+$('rotation').oninput = event => { transform.rotation = Number(event.target.value); update(); };
+$('reset').onclick = reset;
+const pointers = new Map();
+function point(event) {
+  const box = canvas.getBoundingClientRect();
+  return {x:(event.clientX-box.left)*size/box.width-size/2,y:(event.clientY-box.top)*size/box.height-size/2};
+}
+function gesture() {
+  const [a,b] = pointers.values();
+  return b ? {x:(a.x+b.x)/2,y:(a.y+b.y)/2,d:Math.hypot(a.x-b.x,a.y-b.y)} : {...a,d:0};
+}
+canvas.onpointerdown = event => {
+  if (!photo || pointers.size >= 2 || event.button !== 0) return;
+  canvas.setPointerCapture(event.pointerId);
+  pointers.set(event.pointerId,point(event));
+};
+canvas.onpointermove = event => {
+  if (!pointers.has(event.pointerId)) return;
+  const before = gesture();
+  pointers.set(event.pointerId,point(event));
+  const after = gesture();
+  const next = before.d && after.d ? Math.max(.25,Math.min(5,transform.zoom*after.d/before.d)) : transform.zoom;
+  const ratio = next/transform.zoom;
+  transform.x = after.x+(transform.x-before.x)*ratio;
+  transform.y = after.y+(transform.y-before.y)*ratio;
+  transform.zoom = next;
+  update();
+};
+canvas.onpointerup = canvas.onpointercancel = canvas.onlostpointercapture = event => pointers.delete(event.pointerId);
+async function download(format) {
+  if (!photo || !overlay) return;
+  const selected = {campaign,frame};
+  const image = document.createElement('canvas');
+  image.width = image.height = size;
+  paint(image.getContext('2d'),format === 'jpg');
+  const type = format === 'jpg' ? 'image/jpeg' : 'image/png';
+  const blob = await new Promise(resolve => image.toBlob(resolve,type,.95));
+  if (!blob) throw Error('The export could not be created.');
+  const url = URL.createObjectURL(blob);
+  const anchor = node('a',null,{href:url,download:selected.campaign.slug+'.'+format});
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
+  setTimeout(() => URL.revokeObjectURL(url),60000);
+  const id = crypto.randomUUID();
+  try { await rpc('recordExport',selected.campaign.id,selected.frame.id,id); }
+  catch (error) {
+    try { await rpc('recordExport',selected.campaign.id,selected.frame.id,id); }
+    catch (retryError) { notice('Image generated. The usage counter is temporarily unavailable.'); }
+  }
+}
+$('png').onclick = () => download('png').catch(fail);
+$('jpg').onclick = () => download('jpg').catch(fail);
+
+let state, selectedId;
+function inputLabel(text,tag,attrs,value) {
+  const label = node('label',text);
+  const field = node(tag,null,attrs);
+  if (value !== undefined) field.value = value;
+  label.append(field);
+  return {label,field};
+}
+function selectLabel(text,choices,value) {
+  const pair = inputLabel(text,'select');
+  for (const [id,name] of choices) pair.field.append(node('option',name,{value:id}));
+  pair.field.value = value;
+  return pair;
+}
+function submit(form,action,success) {
+  form.onsubmit = async event => {
+    event.preventDefault();
+    if (form.dataset.busy) return;
+    form.dataset.busy = 'true';
+    const controls = [...form.querySelectorAll('button,input,select,textarea')].filter(el => !el.disabled);
+    controls.forEach(el => { el.disabled = true; });
+    notice('Saving…');
+    try { await action(); notice(success); }
+    catch (error) { fail(error); }
+    finally { delete form.dataset.busy; controls.forEach(el => { el.disabled = false; }); }
+  };
+}
+function readFile(file,frame = false) {
+  if (!file) return Promise.resolve('');
+  if (file.size > 8*1024*1024) return Promise.reject(Error('Choose a file under 8 MB.'));
+  const reader = new FileReader();
+  return new Promise((resolve,reject) => {
+    reader.onerror = () => reject(Error('Could not read this file.'));
+    reader.onload = async () => {
+      try {
+        if (frame) {
+          if (file.type !== 'image/png') throw Error('Choose a transparent PNG.');
+          const img = await decode(reader.result);
+          if (img.width !== size || img.height !== size) throw Error('Use a 1080 × 1080 frame.');
+          const sample = document.createElement('canvas');
+          sample.width = sample.height = size;
+          const pixels = sample.getContext('2d',{willReadFrequently:true});
+          pixels.drawImage(img,0,0);
+          const rgba = pixels.getImageData(0,0,size,size).data;
+          let transparent = false;
+          for (let i = 3; i < rgba.length; i += 4) {
+            if (rgba[i] === 0) { transparent = true; break; }
+          }
+          if (!transparent) throw Error('The frame needs a transparent area for the photo.');
+          // Normalize indexed and RGB+tRNS inputs to the browser encoder's RGBA PNG.
+          const png = sample.toDataURL('image/png');
+          if (png.length > Math.ceil(8*1024*1024/3)*4+40) throw Error('The normalized PNG exceeds 8 MB.');
+          resolve(png);
+        } else {
+          await decode(reader.result);
+          resolve(reader.result);
+        }
+      } catch (error) { reject(error); }
+    };
+    reader.readAsDataURL(file);
+  });
+}
+function previewImage(src,img) {
+  img.src = src;
+  img.hidden = false;
+}
+function imageInput(label,accept,img,frame = false) {
+  const pair = inputLabel(label,'input',{type:'file',accept});
+  pair.field.onchange = async () => {
+    const file = pair.field.files[0];
+    if (!file) return;
+    try {
+      const src = await readFile(file,frame);
+      if (pair.field.files[0] === file) previewImage(src,img);
+    } catch (error) { if (pair.field.files[0] === file) { pair.field.value = ''; fail(error); } }
+  };
+  return pair;
+}
+function previewStored(img,...args) {
+  rpc('adminAsset',...args).then(src => { if (img.isConnected) previewImage(src,img); }).catch(fail);
+}
+function brandEditor(c,kind) {
+  const form = node('form',null,{class:'frame-admin stack'});
+  const img = node('img',null,{class:'frame-preview',alt:'Campaign '+kind,hidden:''});
+  const field = imageInput(kind === 'logo' ? 'Campaign logo' : 'Campaign cover','image/png,image/jpeg',img);
+  form.append(field.label,img,node('button','Save '+kind));
+  if (c[kind]) {
+    form.append(button('Preview saved '+kind,() => previewStored(img,c.id,kind)));
+    form.append(button('Remove '+kind,async () => {
+      if (!confirm('Remove the campaign '+kind+'?')) return;
+      try { await rpc('saveBrand',c.id,kind,''); await refresh(); notice('Image removed.'); } catch (error) { fail(error); }
+    },'danger'));
+  }
+  submit(form,async () => {
+    if (!field.field.files.length) throw Error('Choose an image first.');
+    await rpc('saveBrand',c.id,kind,await readFile(field.field.files[0]));
+    await refresh();
+  },'Image saved.');
+  return form;
+}
+function frameEditor(c,f,nextOrder) {
+  const form = node('form',null,{class:'frame-admin stack'});
+  const img = node('img',null,{class:'frame-preview',alt:'Frame preview',hidden:''});
+  const name = inputLabel('Frame name','input',{maxlength:100,required:''},f?.name || '');
+  const order = inputLabel('Display order','input',{type:'number',min:0,max:1000000,required:''},f?.order ?? nextOrder);
+  const image = imageInput(f ? 'Replace PNG' : 'Upload PNG','image/png',img,true);
+  const enabled = inputLabel('Enabled','input',{type:'checkbox'});
+  enabled.label.className = 'check';
+  enabled.field.checked = f ? f.enabled : true;
+  form.append(node('h3',f ? f.name : 'Add frame'),name.label,order.label,image.label,img,enabled.label);
+  if (f) {
+    form.append(node('div',f.count+' generations',{class:'muted'}));
+    form.append(button('Preview saved frame',() => previewStored(img,c.id,'frame',f.id)));
+    form.append(button('Delete frame',async () => {
+      if (!confirm('Delete this frame? Its usage count will be kept.')) return;
+      try {
+        await rpc('saveFrame',{id:f.id,campaign:c.id,name:f.name,order:f.order,delete:true});
+        await refresh();
+        notice('Frame deleted.');
+      } catch (error) { fail(error); }
+    },'danger'));
+  }
+  form.append(node('button',f ? 'Save frame' : 'Add frame',{class:'primary'}));
+  submit(form,async () => {
+    const data = await readFile(image.field.files[0],true);
+    await rpc('saveFrame',{id:f?.id || '',campaign:c.id,name:name.field.value,order:order.field.value,enabled:enabled.field.checked,image:data});
+    await refresh();
+  },'Frame saved.');
+  return form;
+}
+function renderAdmin() {
+  const c = state.campaigns.find(item => item.id === selectedId);
+  const allFrames = state.frames.filter(f => f.campaign === c?.id);
+  const frames = allFrames.filter(f => !f.deleted);
+  const total = allFrames.reduce((sum,f) => sum + f.count,0);
+  $('adminNav').replaceChildren(...state.campaigns.map(item => {
+    const el = button(item.title + ' · ' + item.status,() => { selectedId = item.id; renderAdmin(); });
+    el.setAttribute('aria-current',String(item.id === selectedId));
+    return el;
+  }));
+  const panel = node('section',null,{class:'panel stack'});
+  panel.append(node('h2',c ? c.title : 'New campaign'));
+  if (c) {
+    panel.append(node('div',total+' generations',{class:'count'}));
+    if (state.url) {
+      const link = linkFor(state.url,c);
+      const actions = node('div',null,{class:'row'});
+      actions.append(button('Copy campaign link',() => copy(link)));
+      if (c.status === 'published') actions.append(node('a','Open campaign',{class:'button',href:link,target:'_blank',rel:'noopener'}));
+      panel.append(actions);
+    }
+  }
+  const form = node('form',null,{class:'stack'});
+  const name = inputLabel('Title','input',{required:'',maxlength:100},c?.title || '');
+  const slug = inputLabel('Link slug','input',{required:'',maxlength:80,pattern:'[a-z0-9]+(?:-[a-z0-9]+)*'},c?.slug || '');
+  slug.field.readOnly = !!c;
+  if (!c) {
+    let edited = false;
+    slug.field.addEventListener('input',() => { edited = true; });
+    name.field.addEventListener('input',() => {
+      if (!edited) slug.field.value = name.field.value.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,80).replace(/-$/,'');
+    });
+  }
+  const description = inputLabel('Description','textarea',{rows:3,maxlength:2000},c?.description || '');
+  const status = selectLabel('Visibility',[['draft','Draft'],['published','Published'],['disabled','Disabled']],c?.status || 'draft');
+  const defaultFrame = selectLabel('Default frame',[['','First enabled frame'],...frames.filter(f => f.enabled).map(f => [f.id,f.name])],c?.defaultId || '');
+  form.append(name.label,slug.label,description.label,status.label,defaultFrame.label,node('button','Save campaign',{class:'primary'}));
+  submit(form,async () => {
+    selectedId = await rpc('saveCampaign',{id:c?.id || '',title:name.field.value,slug:slug.field.value,description:description.field.value,status:status.field.value,defaultId:defaultFrame.field.value});
+    await refresh();
+  },'Campaign saved.');
+  panel.append(form);
+  $('manage').replaceChildren(panel);
+  if (!c) return;
+  const artwork = node('section',null,{class:'panel stack'});
+  artwork.append(node('h2','Campaign artwork'),brandEditor(c,'logo'),brandEditor(c,'cover'));
+  const list = node('section',null,{class:'panel stack'});
+  list.append(node('h2','Frames'),node('p','Lower display order numbers appear first. Upload transparent 1080 × 1080 PNGs.',{class:'muted'}));
+  list.append(...frames.map(f => frameEditor(c,f)),frameEditor(c,null,Math.min(1000000,Math.max(0,...frames.map(f => f.order+10)))));
+  const deleted = allFrames.filter(f => f.deleted);
+  if (deleted.length) {
+    const history = node('details');
+    history.append(node('summary','Deleted frame statistics'),...deleted.map(f => node('p',f.name+' · '+f.count+' generations')));
+    list.append(history);
+  }
+  $('manage').append(artwork,list);
+}
+async function refresh() {
+  state = await rpc('adminState');
+  if (selectedId === undefined) selectedId = state.campaigns[0]?.id || '';
+  $('publicUrl').value = state.url;
+  renderAdmin();
+}
+async function init() {
+  if (boot.mode === 'denied') { notice('Sign in with the owner account and open the owner-only dashboard URL.',true); return; }
+  if (boot.mode === 'admin') {
+    $('admin').hidden = false;
+    $('newCampaign').onclick = () => { selectedId = ''; renderAdmin(); };
+    submit($('urlForm'),async () => { await rpc('setPublicUrl',$('publicUrl').value); await refresh(); },'Public URL saved.');
+    await refresh();
+    return;
+  }
+  catalog = await rpc('publicCatalog');
+  const item = boot.slug ? catalog.find(c => c.slug === boot.slug) : catalog[0];
+  $('public').hidden = false;
+  $('campaigns').replaceChildren(...catalog.map(c => {
+    const el = button(c.title,() => selectCampaign(c));
+    el.dataset.id = c.id;
+    return el;
+  }));
+  $('campaigns').hidden = catalog.length <= 1 && !!item;
+  if (item) await selectCampaign(item);
+  else notice(boot.slug ? 'This campaign is unavailable.' : 'No campaigns are published.',!!boot.slug);
+}
+notice('Loading…');
+init().then(() => { if (boot.mode === 'admin') notice(''); }).catch(fail);
+</script>
+</body>
+</html>
