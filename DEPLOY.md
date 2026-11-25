@@ -39,6 +39,6 @@ If your Workspace account omits **Anyone**, ask your Workspace administrator whe
 
 ## Manage campaigns and frames
 
-Upload transparent 1080 × 1080 PNG frames up to 8 MB each. Logo and cover images accept PNG or JPG up to 8 MB. Deleted frames move to Drive Trash and retain their historical generation counts. Exports use the visitor’s browser to process personal photos. The server receives campaign and frame IDs with a random event ID for usage counts.
+Upload transparent square PNG frames at any resolution, up to 8 MB each. The browser resizes each frame to 1080 × 1080 during upload, and finished exports are 1080 × 1080. Logo and cover images accept PNG or JPG up to 8 MB. Deleted frames move to Drive Trash and retain their historical generation counts. Exports use the visitor’s browser to process personal photos. The server receives campaign and frame IDs with a random event ID for usage counts.
 
 The repository’s ZIP is the original archive. Use the three copy links above for this installation.

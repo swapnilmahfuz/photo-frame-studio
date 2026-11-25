@@ -1,4 +1,3 @@
-const SIZE = 1080;
 const LIMIT = 8 * 1024 * 1024;
 const props = () => PropertiesService.getScriptProperties();
 
@@ -189,7 +188,7 @@ function saveFrame(input) {
     const frames = rows_(sheet);
     const row = frames.find(({data:f}) => f.id === input.id && f.campaign === input.campaign && !f.deleted);
     if (input.id && !row) throw Error('Frame unavailable.');
-    if (!row && !input.image) throw Error('Choose a transparent 1080 × 1080 PNG.');
+    if (!row && !input.image) throw Error('Choose a square PNG frame with transparency (up to 8 MB).');
     const existing = row ? row.data : {id:key_(),campaign:input.campaign,count:0,file:''};
     const enabled = input.enabled === true && input.delete !== true;
     if (existing.enabled && !enabled && campaign.data.status === 'published' &&
@@ -228,14 +227,14 @@ function field_(value,max,optional) {
 function storeImage_(data,frame) {
   const match = typeof data === 'string' && data.length <= Math.ceil(LIMIT/3)*4+40 &&
     data.match(/^data:(image\/(?:png|jpeg));base64,([A-Za-z0-9+/=]+)$/);
-  if (!match) throw Error('Choose a PNG or JPG under 8 MB.');
+  if (!match) throw Error(frame ? 'Choose a square PNG frame with transparency (up to 8 MB).' : 'Choose a PNG or JPG up to 8 MB.');
   const bytes = Utilities.base64Decode(match[2]);
   const b = i => bytes[i] & 255;
   const png = [137,80,78,71,13,10,26,10,0,0,0,13,73,72,68,82].every((v,i) => b(i) === v);
   const jpeg = b(0) === 255 && b(1) === 216 && b(2) === 255;
   const u32 = i => b(i)*16777216 + b(i+1)*65536 + b(i+2)*256 + b(i+3);
   if (bytes.length > LIMIT || !(match[1] === 'image/png' ? png : jpeg)) throw Error('Invalid image file.');
-  if (frame && (!png || u32(16) !== SIZE || u32(20) !== SIZE || b(25) !== 6)) throw Error('Use a 1080 × 1080 PNG with an RGBA channel.');
+  if (frame && (!png || !u32(16) || u32(16) !== u32(20) || b(25) !== 6)) throw Error('Use a square PNG frame with transparency.');
   const extension = png ? '.png' : '.jpg';
   return DriveApp.getFolderById(props().getProperty('FOLDER')).createFile(Utilities.newBlob(bytes,match[1],key_()+extension)).getId();
 }

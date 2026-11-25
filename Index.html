@@ -259,29 +259,30 @@ function submit(form,action,success) {
 }
 function readFile(file,frame = false) {
   if (!file) return Promise.resolve('');
-  if (file.size > 8*1024*1024) return Promise.reject(Error('Choose a file under 8 MB.'));
+  if (file.size > 8*1024*1024) return Promise.reject(Error('Choose a file up to 8 MB.'));
   const reader = new FileReader();
   return new Promise((resolve,reject) => {
     reader.onerror = () => reject(Error('Could not read this file.'));
     reader.onload = async () => {
       try {
         if (frame) {
-          if (file.type !== 'image/png') throw Error('Choose a transparent PNG.');
+          if (file.type !== 'image/png') throw Error('Choose a square PNG frame with transparency.');
           const img = await decode(reader.result);
-          if (img.width !== size || img.height !== size) throw Error('Use a 1080 × 1080 frame.');
+          if (img.naturalWidth !== img.naturalHeight) throw Error('Frame width and height must match.');
           const sample = document.createElement('canvas');
           sample.width = sample.height = size;
           const pixels = sample.getContext('2d',{willReadFrequently:true});
-          pixels.drawImage(img,0,0);
+          pixels.imageSmoothingQuality = 'high';
+          pixels.drawImage(img,0,0,size,size);
           const rgba = pixels.getImageData(0,0,size,size).data;
           let transparent = false;
           for (let i = 3; i < rgba.length; i += 4) {
-            if (rgba[i] === 0) { transparent = true; break; }
+            if (rgba[i] < 255) { transparent = true; break; }
           }
           if (!transparent) throw Error('The frame needs a transparent area for the photo.');
           // Normalize indexed and RGB+tRNS inputs to the browser encoder's RGBA PNG.
           const png = sample.toDataURL('image/png');
-          if (png.length > Math.ceil(8*1024*1024/3)*4+40) throw Error('The normalized PNG exceeds 8 MB.');
+          if (png.length > Math.ceil(8*1024*1024/3)*4+40) throw Error('The resized PNG exceeds the 8 MB upload limit.');
           resolve(png);
         } else {
           await decode(reader.result);
@@ -407,7 +408,7 @@ function renderAdmin() {
   const artwork = node('section',null,{class:'panel stack'});
   artwork.append(node('h2','Campaign artwork'),brandEditor(c,'logo'),brandEditor(c,'cover'));
   const list = node('section',null,{class:'panel stack'});
-  list.append(node('h2','Frames'),node('p','Lower display order numbers appear first. Upload transparent 1080 × 1080 PNGs.',{class:'muted'}));
+  list.append(node('h2','Frames'),node('p','Lower display order numbers appear first. Upload square PNG frames with transparency at any resolution, up to 8 MB each. Frames resize automatically to 1080 × 1080.',{class:'muted'}));
   list.append(...frames.map(f => frameEditor(c,f)),frameEditor(c,null,Math.min(1000000,Math.max(0,...frames.map(f => f.order+10)))));
   const deleted = allFrames.filter(f => f.deleted);
   if (deleted.length) {
