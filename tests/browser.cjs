@@ -271,7 +271,12 @@ async function main() {
     await admin.getByText('Campaign published.',{exact:true}).waitFor();
     const galleryTraffic = [];
     const gallery = await browser.newPage({viewport:{width:390,height:844},hasTouch:true});
-    await bind(gallery,galleryTraffic);
+    let failFullOnce = false;
+    await bind(gallery,galleryTraffic,0,(_req,url)=>{
+      if (!failFullOnce || !url.pathname.endsWith('/full.json')) return false;
+      failFullOnce = false;
+      return true;
+    });
     await gallery.goto(base+'/?campaign=archive-test');
     await gallery.getByRole('button',{name:'Frame 01',exact:true}).waitFor();
     await gallery.locator('#frames button img:not([hidden])').first().waitFor();
@@ -285,6 +290,22 @@ async function main() {
     await last.scrollIntoViewIfNeeded();
     await last.locator('img:not([hidden])').waitFor();
     assert.equal(galleryTraffic.filter(req=>req.path.endsWith('/full.json')).length,1);
+    const fullPath = galleryTraffic.find(req=>req.path.endsWith('/full.json')).path.replace(/\.json$/,'');
+    const cacheLocation = '/.frame-cache/'+project+fullPath;
+    await gallery.evaluate(async key => {
+      const cache = await caches.open('studio-artwork-v1');
+      await cache.put(key,new Response('corrupted artwork',{headers:{'Content-Type':'image/png'}}));
+    },cacheLocation);
+    failFullOnce = true;
+    await gallery.reload();
+    const selected = gallery.getByRole('button',{name:'Frame 01',exact:true});
+    await selected.waitFor();
+    await gallery.locator('#photo').setInputFiles('public/art/kuet-starter.png');
+    await gallery.waitForFunction(()=>!document.querySelector('#png').disabled);
+    assert.equal(galleryTraffic.filter(req=>req.path.endsWith('/full.json')).length,3);
+    await download(gallery,'PNG');
+    await download(gallery,'JPG');
+    console.log('Corrupt cached frame repaired, transient full-artwork failure retried, PNG/JPG exports passed.');
     console.log('50 distinct uploads passed with interrupted-save recovery; all 50 enabled gallery entries are available and thumbnails load on scroll.');
     await admin.getByRole('button',{name:'Sign out'}).click();
     await admin.getByRole('button',{name:'Continue with Google'}).waitFor();

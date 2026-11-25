@@ -110,7 +110,39 @@ export async function removeLive(slug,token) {
   await firestore('live/'+slug,{method:'DELETE',token});
 }
 
-async function realtime(path,{method = 'GET', token, data, etag, requestTag = false, silent = false, signal, timeout = 20000} = {}) {
+class ArtworkRequestError extends Error {
+  constructor(message,retryable = false) {
+    super(message);
+    this.retryable = retryable;
+  }
+}
+
+async function readArtworkJson(response,progress) {
+  if (!response.body) return response.json();
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  const pieces = [];
+  let bytes = 0;
+  try {
+    for (;;) {
+      const {done,value} = await reader.read();
+      if (done) break;
+      progress();
+      bytes += value.byteLength;
+      if (bytes > 9*1024*1024) {
+        await reader.cancel().catch(()=>{});
+        throw Error('The artwork response exceeds the supported size.');
+      }
+      pieces.push(decoder.decode(value,{stream:true}));
+    }
+    pieces.push(decoder.decode());
+    return JSON.parse(pieces.join(''));
+  } finally { reader.releaseLock(); }
+}
+
+async function realtime(path,{
+  method = 'GET',token,data,etag,requestTag = false,silent = false,signal,timeout = 20000,stream = false
+} = {}) {
   const {databaseURL} = await config();
   const url = new URL(databaseURL+'/'+path+'.json');
   if (token) url.searchParams.set('auth',token);
@@ -119,17 +151,39 @@ async function realtime(path,{method = 'GET', token, data, etag, requestTag = fa
   if (data !== undefined) headers['Content-Type'] = 'application/json';
   if (requestTag) headers['X-Firebase-ETag'] = 'true';
   if (etag) headers['If-Match'] = etag;
-  const deadline = AbortSignal.timeout(timeout);
-  const response = await fetch(url,{
-    method,headers,body:data === undefined ? undefined : JSON.stringify(data),
-    cache:'no-store',referrerPolicy:'no-referrer',signal:signal ? AbortSignal.any([signal,deadline]) : deadline
-  }).catch(error => {
-    if (deadline.aborted) throw Error('The artwork request timed out. Check your connection and try again.');
+  const idle = new AbortController();
+  const deadline = AbortSignal.timeout(stream ? 300000 : timeout);
+  const requestSignal = AbortSignal.any([deadline,idle.signal,...(signal ? [signal] : [])]);
+  let idleTimer;
+  const progress = () => {
+    clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => idle.abort(),timeout);
+  };
+  if (stream) progress();
+  try {
+    const response = await fetch(url,{
+      method,headers,body:data === undefined ? undefined : JSON.stringify(data),
+      cache:'no-store',referrerPolicy:'no-referrer',signal:requestSignal
+    });
+    if (response.status === 412) throw Error('Another tab is publishing this campaign. Try again shortly.');
+    if (!response.ok) {
+      const status = response.status;
+      throw new ArtworkRequestError('Artwork request failed ('+status+'). Check access and try again.',
+        status === 408 || status === 429 || status >= 500);
+    }
+    const payload = response.status === 204 ? null : stream
+      ? await readArtworkJson(response,progress) : await response.json();
+    return {data:payload,tag:response.headers.get('etag')};
+  } catch (error) {
+    signal?.throwIfAborted();
+    if (deadline.aborted || idle.signal.aborted) {
+      throw new ArtworkRequestError('Artwork request timed out. Check your connection and try again.',true);
+    }
+    if (stream && (error instanceof TypeError || error instanceof SyntaxError)) {
+      throw new ArtworkRequestError('The artwork download was interrupted. Try again.',true);
+    }
     throw error;
-  });
-  if (response.status === 412) throw Error('Another tab is publishing this campaign. Try again shortly.');
-  if (!response.ok) throw Error('Artwork request failed ('+response.status+'). Check access and try again.');
-  return {data:response.status===204 ? null : await response.json(),tag:response.headers.get('etag')};
+  } finally { clearTimeout(idleTimer); }
 }
 
 function artPath(slug,frame,version,variant) {
@@ -138,6 +192,8 @@ function artPath(slug,frame,version,variant) {
 }
 
 export function storeArt(slug,frame,version,art,token) {
+  pngPayload(art.full,1080);
+  pngPayload(art.thumb,240);
   return realtime(artPath(slug,frame,version),{method:'PUT',token,data:art,silent:true,timeout:90000});
 }
 
@@ -196,30 +252,73 @@ export async function publishCampaign(draft,token,disable = false) {
 
 let assetCache;
 
-function pngBlob(data) {
-  const prefix = 'data:image/png;base64,';
-  if (typeof data !== 'string' || !data.startsWith(prefix)) throw Error('Frame artwork is unavailable.');
-  const binary = atob(data.slice(prefix.length));
-  const bytes = new Uint8Array(binary.length);
-  for (let index = 0; index < binary.length; index++) bytes[index] = binary.charCodeAt(index);
+const pngPrefix = 'data:image/png;base64,';
+
+function pngPayload(data,size) {
+  if (typeof data !== 'string' || !data.startsWith(pngPrefix)) throw Error('Frame artwork is missing or invalid.');
+  const payload = data.slice(pngPrefix.length);
+  const header = atob(payload.slice(0,32));
+  if (header.slice(0,16) !== '\x89PNG\r\n\x1a\n\0\0\0\rIHDR' || header.length !== 24) {
+    throw Error('Frame artwork is not a valid PNG.');
+  }
+  const dimensions = new DataView(Uint8Array.from(header,byte=>byte.charCodeAt(0)).buffer);
+  if (dimensions.getUint32(16) !== size || dimensions.getUint32(20) !== size) {
+    throw Error('Frame artwork has unexpected dimensions.');
+  }
+  return payload;
+}
+
+function pngBlob(data,size) {
+  const payload = pngPayload(data,size);
+  let bytes;
+  if (Uint8Array.fromBase64) bytes = Uint8Array.fromBase64(payload);
+  else {
+    const binary = atob(payload);
+    bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index++) bytes[index] = binary.charCodeAt(index);
+  }
   return new Blob([bytes],{type:'image/png'});
 }
 
-export async function asset(slug,frame,variant,token,signal) {
+async function fetchArtwork(path,variant,token,signal) {
+  const full = variant === 'full';
+  const options = full ? {token,signal,stream:true,timeout:45000} : {token,signal};
+  try { return await realtime(path,options); }
+  catch (error) {
+    signal?.throwIfAborted();
+    if (!full || !error.retryable) throw error;
+    await new Promise(resolve=>setTimeout(resolve,500));
+    signal?.throwIfAborted();
+    return realtime(path,options);
+  }
+}
+
+export async function asset(slug,frame,variant,token,signal,decode = blob=>blob) {
   if (!['thumb','full'].includes(variant)) throw Error('Invalid artwork variant.');
   const path = artPath(slug,frame.id,frame.version,variant);
   const request = new URL('/.frame-cache/'+projectId+'/'+path,location.origin);
   // Only artwork discovered in a public snapshot is eligible for persistent caching.
   const cache = !token && globalThis.caches && await (assetCache ||= caches.open('studio-artwork-v1').catch(()=>null));
+  signal?.throwIfAborted();
   if (cache) {
     const hit = await cache.match(request).catch(()=>null);
-    if (hit) return hit.blob();
+    if (hit) {
+      try {
+        const value = await decode(await hit.blob());
+        signal?.throwIfAborted();
+        return value;
+      } catch {
+        signal?.throwIfAborted();
+        await cache.delete(request).catch(()=>{});
+      }
+    }
   }
+  const {data} = await fetchArtwork(path,variant,token,signal);
+  const blob = pngBlob(data,variant === 'full' ? 1080 : 240);
+  const value = await decode(blob);
   signal?.throwIfAborted();
-  const {data} = await realtime(path,{token,signal});
-  const blob = pngBlob(data);
-  if (cache) await remember(cache,request,blob).catch(()=>{});
-  return blob;
+  if (cache) void remember(cache,request,blob).catch(()=>{});
+  return value;
 }
 
 let cacheWrites = Promise.resolve();

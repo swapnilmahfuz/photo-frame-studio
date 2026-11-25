@@ -129,10 +129,15 @@ const fullImages = new Map();
 const thumbnailQueue = new Map();
 let activeThumbs = 0;
 
-async function decodeArtwork(blob) {
+async function decodeArtwork(blob,expectedSize) {
   const url = URL.createObjectURL(blob);
-  try { return await decode(url); }
-  finally { URL.revokeObjectURL(url); }
+  try {
+    const image = await decode(url);
+    if (image.naturalWidth !== expectedSize || image.naturalHeight !== expectedSize) {
+      throw Error('Frame artwork has unexpected dimensions.');
+    }
+    return image;
+  } finally { URL.revokeObjectURL(url); }
 }
 
 let loadingFull;
@@ -146,7 +151,7 @@ function sharedArtwork(current,item) {
     const controller = new AbortController();
     const task = {key,controller};
     loadingFull = task;
-    const pending = asset(current.slug,item,'full',undefined,controller.signal).then(decodeArtwork).catch(error => {
+    const pending = asset(current.slug,item,'full',undefined,controller.signal,blob=>decodeArtwork(blob,size)).catch(error => {
       if (fullImages.get(key)===pending) fullImages.delete(key);
       throw error;
     }).finally(()=>{ if (loadingFull===task) loadingFull = null; });
@@ -169,8 +174,8 @@ async function selectFrame(current,item) {
     overlay = loaded;
     $('frameFeedback').textContent = '';
     update();
-  } catch {
-    if (request === frameRequest) $('frameFeedback').textContent = 'Frame unavailable. Select it again to retry.';
+  } catch (error) {
+    if (request === frameRequest) $('frameFeedback').textContent = error.message || 'Frame unavailable. Select it again to retry.';
   }
 }
 
@@ -179,15 +184,13 @@ async function loadThumb(card,current,item) {
   const indicator = card.querySelector('small');
   const img = card.querySelector('img');
   try {
-    const url = URL.createObjectURL(await asset(current.slug,item,'thumb'));
-    try {
-      img.src = url;
-      await img.decode();
-      if (!card.isConnected) return;
-      img.hidden = false;
-      indicator.hidden = true;
+    const thumbnail = await asset(current.slug,item,'thumb',undefined,undefined,blob=>decodeArtwork(blob,240));
+    if (!card.isConnected) return;
+    // A revoked object URL cannot be loaded into another image. Reuse the decoded element.
+    thumbnail.alt = '';
+    img.replaceWith(thumbnail);
+    indicator.hidden = true;
     card.dataset.thumb = 'loaded';
-    } finally { URL.revokeObjectURL(url); }
   } catch {
     indicator.textContent = 'Preview unavailable';
     card.dataset.thumb = 'failed';

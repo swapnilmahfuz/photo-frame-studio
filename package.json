@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "check": "node --check public/studio.js && node --check public/admin.js && node --check public/firebase-data.js",
+    "test:artwork": "node tests/artwork-transfer.mjs",
     "test:rules": "firebase emulators:exec --only firestore,database --project demo-photo-frame-studio 'node tests/firebase-rules.cjs'",
     "test:browser": "firebase emulators:exec --only firestore,database --project demo-photo-frame-studio 'node tests/browser.cjs'"
   },
