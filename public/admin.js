@@ -184,15 +184,27 @@ function render() {
   choices.onchange = () => { draft.defaultId = choices.value; markDirty(); };
   panel.append(title,slug,description,labeled('Default frame',choices),actions);
   const framePanel = el('section',null,{class:'panel stack'});
-  framePanel.append(el('h2','Frames'),el('p','Upload transparent square PNGs up to 8 MB. Full artwork renders at 1080 × 1080.'));
-  const upload = el('input',null,{type:'file',accept:'image/png'});
+  framePanel.append(el('h2','Frames ('+draft.frames.length+')'),el('p','Select one or more transparent square PNGs, up to 8 MB each. Full artwork renders at 1080 × 1080.'));
+  const upload = el('input',null,{type:'file',accept:'image/png',multiple:''});
   upload.onchange = action(async () => {
-    const file = upload.files[0];
-    if (!file) return;
-    notice('Optimizing frame…');
-    addFrame(file.name.replace(/\.png$/i,'').slice(0,100),await processFile(file));
+    const files = Array.from(upload.files);
+    const errors = [];
+    let added = 0;
+    for (const [index,file] of files.entries()) {
+      notice('Optimizing frame '+(index+1)+' of '+files.length+'…');
+      try {
+        addFrame(file.name.replace(/\.png$/i,'').slice(0,100),await processFile(file));
+        added++;
+      } catch (error) {
+        errors.push(file.name+': '+error.message);
+      }
+    }
     render();
-    notice('Frame ready. Save the draft to keep it.');
+    if (errors.length) {
+      notice(added+' ready. '+errors.length+' skipped. '+errors.join(' '),true);
+    } else if (added) {
+      notice((added===1 ? 'Frame ready.' : added+' frames ready.')+' Save the draft to keep '+(added===1 ? 'it.' : 'them.'));
+    }
   });
   framePanel.append(labeled('Add frame',upload),...draft.frames.map(galleryRow));
   $('manage').replaceChildren(panel,framePanel);
@@ -231,20 +243,49 @@ async function saveWhileLocked(token,renew) {
   const slug = draft.slug;
   const latest = await readCampaign('drafts',slug,token);
   if ((latest?.updateTime || '') !== (baseline?.updateTime || '')) throw Error('This campaign changed in another tab. Refresh before editing again.');
-  for (const frame of data.frames) {
-    const bytes = staged.get(frame.version);
-    if (!bytes) continue;
+  const pending = data.frames.filter(frame=>staged.has(frame.version));
+  const uploaded = new Set();
+  let failure;
+  for (const [index,frame] of pending.entries()) {
+    notice('Uploading frame '+(index+1)+' of '+pending.length+' ('+frame.name+')…');
     await renew();
-    await storeArt(slug,frame.id,frame.version,bytes,token);
+    try {
+      await storeArt(slug,frame.id,frame.version,staged.get(frame.version),token);
+      uploaded.add(frame.version);
+    } catch (error) {
+      failure = Error('Upload failed for “'+frame.name+'”. '+error.message);
+      break;
+    }
   }
+  if (failure && !uploaded.size) throw failure;
   const previous = baseline;
+  if (failure) {
+    // Checkpoint successful uploads. Keep the saved artwork for pending replacements.
+    const previousFrames = new Map((previous?.frames || []).map(frame=>[frame.id,frame]));
+    data.frames = data.frames.flatMap(frame => {
+      if (!staged.has(frame.version) || uploaded.has(frame.version)) return [frame];
+      const old = previousFrames.get(frame.id);
+      return old ? [old] : [];
+    });
+    if (!data.frames.some(frame=>frame.id===data.defaultId)) data.defaultId = previous?.defaultId || '';
+    if (!data.frames.some(frame=>frame.id===data.defaultId)) data.defaultId = '';
+  }
   await renew();
   const saved = await writeCampaign('drafts',slug,data,token,previous?.updateTime || '');
   campaigns = [...campaigns.filter(item=>item.slug!==saved.slug),saved].sort((a,b)=>a.title.localeCompare(b.title));
-  openDraft(saved);
+  if (failure) {
+    baseline = saved;
+    for (const version of uploaded) staged.delete(version);
+    render();
+  } else {
+    openDraft(saved);
+  }
   if (previous) {
     const live = await readCampaign('live',slug,token);
     await removeRetired(slug,cleanupCandidates(previous,[live,saved]),token,renew);
+  }
+  if (failure) {
+    throw Error(uploaded.size+' frame upload(s) saved to the draft. '+failure.message+' Save the draft again to retry the remaining frames.');
   }
   return saved;
 }

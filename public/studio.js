@@ -126,7 +126,7 @@ $('jpg').onclick = () => download('jpg').catch(fail);
 let galleryObserver;
 let selectedRequest;
 const fullImages = new Map();
-const thumbnailQueue = [];
+const thumbnailQueue = new Map();
 let activeThumbs = 0;
 
 async function decodeArtwork(blob) {
@@ -186,6 +186,7 @@ async function loadThumb(card,current,item) {
       if (!card.isConnected) return;
       img.hidden = false;
       indicator.hidden = true;
+    card.dataset.thumb = 'loaded';
     } finally { URL.revokeObjectURL(url); }
   } catch {
     indicator.textContent = 'Preview unavailable';
@@ -194,30 +195,37 @@ async function loadThumb(card,current,item) {
 }
 
 function drainThumbs() {
-  while (thumbnailQueue.length && activeThumbs < 2) {
-    const {card,current,item} = thumbnailQueue.shift();
+  while (thumbnailQueue.size && activeThumbs < 2) {
+    const [card,{current,item}] = thumbnailQueue.entries().next().value;
+    thumbnailQueue.delete(card);
     if (!card.isConnected || campaign !== current) continue;
+    card.dataset.thumb = 'loading';
     activeThumbs++;
     loadThumb(card,current,item).finally(() => { activeThumbs--; drainThumbs(); });
   }
 }
 
 function queueThumb(card,current,item) {
-  card.dataset.thumb = 'requested';
-  thumbnailQueue.push({card,current,item});
+  card.dataset.thumb = 'queued';
+  thumbnailQueue.set(card,{current,item});
   drainThumbs();
 }
 
 function makeGallery(current) {
   galleryObserver?.disconnect();
-  thumbnailQueue.length = 0;
-  galleryObserver = new IntersectionObserver(entries => {
+  thumbnailQueue.clear();
+  const framesById = new Map(current.frames.map(item=>[item.id,item]));
+  const observer = new IntersectionObserver(entries => {
+    if (campaign !== current) return;
     for (const {isIntersecting,target} of entries) {
-      if (!isIntersecting) continue;
-      galleryObserver.unobserve(target);
-      if (!target.dataset.thumb) queueThumb(target,current,current.frames.find(item => item.id === target.dataset.id));
+      if (!isIntersecting) {
+        if (thumbnailQueue.delete(target)) delete target.dataset.thumb;
+      } else if (!target.dataset.thumb) {
+        queueThumb(target,current,framesById.get(target.dataset.id));
+      }
     }
   },{root:$('frames'),rootMargin:'100px'});
+  galleryObserver = observer;
   const cards = current.frames.map(item => {
     const card = button(null,() => {
       selectFrame(current,item);
@@ -230,8 +238,10 @@ function makeGallery(current) {
     card.setAttribute('aria-pressed','false');
     return card;
   });
-  $('frames').replaceChildren(...cards);
-  for (const card of cards) galleryObserver.observe(card);
+  const fragment = document.createDocumentFragment();
+  for (const card of cards) fragment.append(card);
+  $('frames').replaceChildren(fragment);
+  for (const card of cards) observer.observe(card);
 }
 
 function shareLink(slug) {

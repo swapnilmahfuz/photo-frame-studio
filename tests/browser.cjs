@@ -25,7 +25,7 @@ async function resetData() {
   await fetch(database+'/.json?ns='+demo,{method:'DELETE',headers:{Authorization:'Bearer owner'}});
 }
 
-async function bind(page,requests,delay = 0) {
+async function bind(page,requests,delay = 0,fault = null) {
   await page.route('https://www.gstatic.com/firebasejs/**',route=>{
     const authModule = `
       const user={email:${JSON.stringify(owner)},getIdToken:async()=>${JSON.stringify(token)},getIdTokenResult:async()=>({
@@ -50,6 +50,11 @@ async function bind(page,requests,delay = 0) {
     const headers = Object.fromEntries(Object.entries(await req.allHeaders()).filter(([key])=>
       ['authorization','content-type','if-match','x-firebase-etag'].includes(key)));
     requests.push({method:req.method(),path:url.pathname,bytes:req.postDataBuffer()?.length || 0});
+    if (fault?.(req,url)) {
+      return route.fulfill({
+        status:503,headers:{'Content-Type':'application/json','Access-Control-Allow-Origin':'*'},body:'{"error":"Test upload interruption"}'
+      });
+    }
     await new Promise(resolve=>setTimeout(resolve,delay));
     const body = fs && req.postData() ? req.postData().replaceAll('projects/'+project+'/','projects/'+demo+'/') : req.postDataBuffer();
     const response = await fetch(endpoint,{method:req.method(),headers,body:body || undefined});
@@ -99,7 +104,13 @@ async function main() {
     browser=await chromium.launch(process.env.CHROMIUM_PATH?{executablePath:process.env.CHROMIUM_PATH,args:['--no-sandbox']}:{});
     const base='http://127.0.0.1:'+server.address().port;
     const admin=await browser.newPage();
-    await bind(admin,[]);
+    const uploadRequests = [];
+    let breakUploadAt = 0;
+    let bulkAttempt = 0;
+    await bind(admin,uploadRequests,0,(req,url)=>{
+      if (req.method()!=='PUT' || !url.pathname.startsWith('/art/archive-test/')) return false;
+      return ++bulkAttempt === breakUploadAt;
+    });
     await admin.goto(base+'/admin');
     await admin.getByRole('button',{name:'Continue with Google'}).click();
     await admin.getByRole('button',{name:'Load KUET starter artwork'}).click();
@@ -214,6 +225,60 @@ async function main() {
     await desktop.getByRole('button',{name:'Browse campaigns'}).click();
     await desktop.getByRole('combobox',{name:'Campaigns'}).waitFor();
     assert.equal(await desktop.getByRole('combobox',{name:'Campaigns'}).locator('option').count(),2);
+    const bulk = await admin.evaluate(() => {
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = 60;
+      const brush = canvas.getContext('2d');
+      return Array.from({length:50},(_, index)=>{
+        brush.clearRect(0,0,60,60);
+        brush.fillStyle = 'hsl('+(index*7)+' 95% 52%)';
+        brush.fillRect(0,0,60,4+index%3);
+        return canvas.toDataURL('image/png').split(',')[1];
+      });
+    });
+    assert.equal(new Set(bulk).size,50);
+    const files = bulk.map((bytes,index)=>({
+      name:'Frame '+String(index+1).padStart(2,'0')+'.png',mimeType:'image/png',buffer:Buffer.from(bytes,'base64')
+    }));
+    breakUploadAt = bulkAttempt+3;
+    await admin.getByLabel('Add frame').setInputFiles(files);
+    await admin.getByText('50 frames ready.',{exact:false}).waitFor();
+    await admin.getByRole('button',{name:'Publish',exact:true}).click();
+    await admin.getByText('2 frame upload(s) saved to the draft. Upload failed for “Frame 03”.',{exact:false}).waitFor();
+    const draftResponse = await fetch(firestore+'/v1/projects/'+demo+'/databases/(default)/documents/drafts/archive-test',{
+      headers:{Authorization:'Bearer '+token}
+    });
+    const draftRecord = await draftResponse.json();
+    assert.equal(draftRecord.fields.frames.arrayValue.values.length,3);
+    await desktop.reload();
+    await desktop.getByRole('button',{name:'Legacy artwork'}).waitFor();
+    assert.equal(await desktop.locator('#frames button').count(),1);
+
+    await admin.getByRole('button',{name:'Save draft'}).click();
+    await admin.getByText('Draft saved.',{exact:true}).waitFor();
+    assert.equal(bulkAttempt,52); // One previous frame, 50 distinct uploads, one failed attempt.
+    await admin.getByRole('button',{name:'Move up'}).nth(1).click();
+    await admin.getByLabel('Default frame').selectOption({label:'Frame 01'});
+    await admin.getByLabel('Enabled',{exact:true}).nth(1).uncheck();
+    await admin.getByRole('button',{name:'Publish',exact:true}).click();
+    await admin.getByText('Campaign published.',{exact:true}).waitFor();
+    const galleryTraffic = [];
+    const gallery = await browser.newPage({viewport:{width:390,height:844},hasTouch:true});
+    await bind(gallery,galleryTraffic);
+    await gallery.goto(base+'/?campaign=archive-test');
+    await gallery.getByRole('button',{name:'Frame 01',exact:true}).waitFor();
+    await gallery.locator('#frames button img:not([hidden])').first().waitFor();
+    assert.equal(await gallery.locator('#frames button').count(),50);
+    assert.equal(await gallery.getByRole('button',{name:'Legacy artwork'}).count(),0);
+    assert.equal(await gallery.getByRole('button',{name:'Frame 01',exact:true}).getAttribute('aria-pressed'),'true');
+    assert.ok(galleryTraffic.filter(req=>req.path.endsWith('/thumb.json')).length<12);
+    assert.equal(galleryTraffic.filter(req=>req.path.endsWith('/full.json')).length,1);
+    const last = gallery.getByRole('button',{name:'Frame 50',exact:true});
+    assert.equal(await last.locator('img').getAttribute('src'),null);
+    await last.scrollIntoViewIfNeeded();
+    await last.locator('img:not([hidden])').waitFor();
+    assert.equal(galleryTraffic.filter(req=>req.path.endsWith('/full.json')).length,1);
+    console.log('50 distinct uploads passed with interrupted-save recovery; all 50 enabled gallery entries are available and thumbnails load on scroll.');
     await admin.getByRole('button',{name:'Sign out'}).click();
     await admin.getByRole('button',{name:'Continue with Google'}).waitFor();
     console.log(JSON.stringify({shellMs,artworkMs,fullRequests,visitorWriteRequests:0}));

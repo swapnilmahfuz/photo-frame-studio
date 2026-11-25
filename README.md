@@ -30,6 +30,8 @@ The import carries campaign titles, descriptions, slugs, frame ordering and name
 
 ## Manage and verify
 
+- Select one or more PNGs under **Add frame**. The frame counter includes everything in the draft. Use the row controls to replace artwork, disable, reorder or delete a frame.
+- If an artwork upload is interrupted, completed uploads are saved to the draft and pending files remain available to retry while the dashboard stays open. An interrupted save leaves the live campaign unchanged.
 - **Save draft** keeps changes private. **Publish** replaces the public snapshot with the enabled frames, and **Disable** withdraws the public snapshot and artwork access. Opening the public link again fetches current metadata. A visitor can retain artwork their browser already downloaded.
 - Public visitors load one campaign document and the selected full-resolution asset. Visible thumbnails load progressively with at most two thumbnail requests in flight. Versioned artwork is cached in the browser. Photo input and exports use browser memory, Canvas and local object URLs.
 - Sign out or use an incognito window to verify the campaign and both image downloads. A signed-out visitor should see a sign-in prompt at `/admin`. A non-owner Google account should be denied access to the dashboard.

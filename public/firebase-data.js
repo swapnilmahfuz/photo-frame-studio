@@ -110,7 +110,7 @@ export async function removeLive(slug,token) {
   await firestore('live/'+slug,{method:'DELETE',token});
 }
 
-async function realtime(path,{method = 'GET', token, data, etag, requestTag = false, silent = false, signal} = {}) {
+async function realtime(path,{method = 'GET', token, data, etag, requestTag = false, silent = false, signal, timeout = 20000} = {}) {
   const {databaseURL} = await config();
   const url = new URL(databaseURL+'/'+path+'.json');
   if (token) url.searchParams.set('auth',token);
@@ -119,9 +119,13 @@ async function realtime(path,{method = 'GET', token, data, etag, requestTag = fa
   if (data !== undefined) headers['Content-Type'] = 'application/json';
   if (requestTag) headers['X-Firebase-ETag'] = 'true';
   if (etag) headers['If-Match'] = etag;
+  const deadline = AbortSignal.timeout(timeout);
   const response = await fetch(url,{
     method,headers,body:data === undefined ? undefined : JSON.stringify(data),
-    cache:'no-store',referrerPolicy:'no-referrer',signal:signal ? AbortSignal.any([signal,AbortSignal.timeout(20000)]) : AbortSignal.timeout(20000)
+    cache:'no-store',referrerPolicy:'no-referrer',signal:signal ? AbortSignal.any([signal,deadline]) : deadline
+  }).catch(error => {
+    if (deadline.aborted) throw Error('The artwork request timed out. Check your connection and try again.');
+    throw error;
   });
   if (response.status === 412) throw Error('Another tab is publishing this campaign. Try again shortly.');
   if (!response.ok) throw Error('Artwork request failed ('+response.status+'). Check access and try again.');
@@ -134,7 +138,7 @@ function artPath(slug,frame,version,variant) {
 }
 
 export function storeArt(slug,frame,version,art,token) {
-  return realtime(artPath(slug,frame,version),{method:'PUT',token,data:art,silent:true});
+  return realtime(artPath(slug,frame,version),{method:'PUT',token,data:art,silent:true,timeout:90000});
 }
 
 export function removeArt(slug,frame,version,token) {
