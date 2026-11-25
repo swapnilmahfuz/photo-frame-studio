@@ -25,7 +25,7 @@ Use **Deploy → New deployment → Web app** for each row. Deploy both under th
 | Deployment | Execute as | Who has access | What to open |
 | --- | --- | --- | --- |
 | Public editor | Me | Anyone | Copy the web app URL ending in `/exec`. |
-| Super Admin | Me | Only myself | Open this deployment’s `/exec` URL followed by `?view=admin`. |
+| Super Admin | Me | Only myself | Open this deployment’s `/exec` URL followed by `/admin`. |
 
 In the Super Admin dashboard, paste the public deployment’s base `/exec` URL into **Public web app URL** and click **Save public URL**. Choose **KUET 4th Convocation 2027** and click **Copy campaign link**. Its URL ends in `?campaign=kuet-4th-convocation-2027`.
 
@@ -34,7 +34,7 @@ If your Workspace account omits **Anyone**, ask your Workspace administrator whe
 ## Verify before sharing
 
 - In a signed-out browser window, open the campaign link. Confirm that the editor and starter frame load, then export a sample photo as PNG and JPG. Both files should be 1080 × 1080.
-- In that window, open the public base URL followed by `?view=admin` and confirm that the app denies dashboard access. The separate Super Admin deployment should require the owner’s Google sign-in.
+- In that window, open the public base URL followed by `/admin` and confirm that the app denies dashboard access. The separate Super Admin deployment should require the owner’s Google sign-in. Existing dashboard links with `?view=admin` also work.
 - In the owner dashboard, verify that the generation counts incremented. Campaign and frame edits take effect on fresh page loads without a new deployment.
 
 ## Manage campaigns and frames

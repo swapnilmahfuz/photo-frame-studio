@@ -31,13 +31,15 @@ function setupPlatform() {
 function doGet(e) {
   const q = e && e.parameter || {};
   const page = HtmlService.createTemplateFromFile('Index');
-  const admin = q.view === 'admin';
+  const path = e && e.pathInfo || '';
+  const admin = path === 'admin' || path === 'admin/' || q.view === 'admin';
   let mode = 'public';
   if (admin) {
     try { owner_(); mode = 'admin'; } catch (error) { mode = 'denied'; }
   }
   page.boot = JSON.stringify({mode,slug:String(q.campaign || '').slice(0,100),url:props().getProperty('PUBLIC_URL') || ''}).replace(/</g,'\\u003c');
-  return page.evaluate().setTitle('Photo Frame Studio').addMetaTag('viewport','width=device-width, initial-scale=1');
+  const title = admin ? 'Super Admin | Photo Frame Studio' : 'Photo Frame Studio';
+  return page.evaluate().setTitle(title).addMetaTag('viewport','width=device-width, initial-scale=1');
 }
 
 function owner_() {
