@@ -1,4 +1,4 @@
-import {asset, defaultCampaign, listLive, readLive, validSlug} from './firebase-data.js';
+import {asset, campaignVisitorCount, defaultCampaign, listLive, readLive, validSlug} from './firebase-data.js';
 
 const $ = id => document.getElementById(id);
 function notice(message, error = false) {
@@ -260,10 +260,26 @@ function shareLink(slug) {
   return url.href;
 }
 
+function visitCampaign(slug) {
+  const key = 'studio-visit:'+slug;
+  const record = async () => {
+    try {
+      if (localStorage.getItem(key)) return campaignVisitorCount(slug);
+    } catch { return campaignVisitorCount(slug); }
+    let count;
+    try { count = await campaignVisitorCount(slug,true); }
+    catch { return campaignVisitorCount(slug); }
+    try { localStorage.setItem(key,'1'); } catch {}
+    return count;
+  };
+  return navigator.locks ? navigator.locks.request(key,record) : record();
+}
+
 async function showCampaign(slug) {
   const request = Symbol();
   selectedRequest = request;
   $('share').hidden = true;
+  $('visitorCount').hidden = true;
   notice('Loading campaign…');
   try {
     const current = await readLive(slug);
@@ -281,6 +297,11 @@ async function showCampaign(slug) {
     makeGallery(current);
     if (first) selectFrame(current,first);
     else { update(); $('frameFeedback').textContent = 'No frames are published.'; }
+    visitCampaign(slug).then(count => {
+      if (selectedRequest !== request) return;
+      $('visitorCount').textContent = count.toLocaleString() + (count === 1 ? ' visitor' : ' visitors');
+      $('visitorCount').hidden = false;
+    }).catch(()=>{});
   } catch (error) {
     if (selectedRequest !== request) return;
     campaign = overlay = null;

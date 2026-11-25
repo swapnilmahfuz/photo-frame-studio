@@ -1,6 +1,6 @@
 const {assertFails,assertSucceeds,initializeTestEnvironment} = require('@firebase/rules-unit-testing');
 const {getDoc,setDoc,deleteDoc,getDocs,doc,collection} = require('firebase/firestore');
-const {get,set,remove,ref} = require('firebase/database');
+const {get,set,remove,ref,increment} = require('firebase/database');
 const {readFileSync} = require('node:fs');
 const assert = require('node:assert/strict');
 
@@ -45,10 +45,20 @@ async function main() {
       await assertFails(set(ref(db,gate),{frames:{'frame-1':'v1'}}));
       await assertFails(set(ref(db,lock),{operation:'x'}));
     }
+    const visitors = ref(anonymous.database(),'visitors/'+slug);
+    await assertFails(get(visitors));
+    await assertFails(set(visitors,increment(1)));
     await assertSucceeds(setDoc(doc(owner.firestore(),'live',slug),entry));
     await assertSucceeds(set(ref(owner.database(),gate),{frames:{'frame-1':'v1'}}));
     const publicFs = anonymous.firestore();
     const publicDb = anonymous.database();
+    await assertFails(set(visitors,5));
+    await assertSucceeds(set(visitors,increment(1)));
+    await assertSucceeds(set(visitors,increment(1)));
+    assert.equal((await assertSucceeds(get(visitors))).val(),2);
+    await assertFails(set(visitors,increment(2)));
+    await assertFails(set(visitors,increment(-1)));
+    await assertFails(remove(visitors));
     assert.equal((await assertSucceeds(getDoc(doc(publicFs,'live',slug)))).exists(),true);
     assert.equal((await assertSucceeds(getDocs(collection(publicFs,'live')))).size,1);
     assert.equal((await assertSucceeds(get(ref(publicDb,path+'v1/full')))).val(),png);
@@ -64,6 +74,8 @@ async function main() {
     await assertFails(get(ref(publicDb,path+'v1/full')));
     await assertSucceeds(get(ref(publicDb,path+'v2/full')));
     await assertSucceeds(remove(ref(owner.database(),gate)));
+    await assertFails(get(visitors));
+    await assertFails(set(visitors,increment(1)));
     await assertSucceeds(deleteDoc(doc(owner.firestore(),'live',slug)));
     assert.equal((await assertSucceeds(getDoc(doc(publicFs,'live',slug)))).exists(),false);
     await assertFails(get(ref(publicDb,path+'v2/full')));

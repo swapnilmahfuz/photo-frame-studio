@@ -160,6 +160,7 @@ async function main() {
     assert.equal(traffic.filter(x=>x.path.endsWith('/full.json')).length,1);
     assert.equal(traffic.filter(x=>x.path.endsWith('/thumb.json')).length,2);
     const artworkMs=Date.now()-start;
+    await mobile.getByText('1 visitor',{exact:true}).waitFor();
 
     await mobile.locator('#photo').setInputFiles('public/art/kuet-starter.png');
     await mobile.getByRole('button',{name:'Download PNG'}).waitFor();
@@ -199,15 +200,20 @@ async function main() {
     assert.equal(await mobile.locator('#zoom').inputValue(),zoom);
     assert.equal(await mobile.locator('#rotation').inputValue(),rotation);
     assert.equal(traffic.length,requestCount);
-    assert.ok(traffic.every(x=>x.method==='GET' && x.bytes===0));
+    const countWrites = ()=>traffic.filter(x=>x.method==='PUT' && x.path.startsWith('/visitors/'));
+    assert.equal(countWrites().length,1);
+    assert.ok(traffic.every(x=>x.method==='GET' ? x.bytes===0 : countWrites().includes(x)));
 
     const fullRequests=traffic.filter(x=>x.path.endsWith('/full.json')).length;
     await mobile.reload();
     await mobile.waitForFunction(()=>document.querySelectorAll('#frames img:not([hidden])').length===2);
     await mobile.waitForFunction(()=>document.querySelector('#frameFeedback').textContent==='');
     assert.equal(traffic.filter(x=>x.path.endsWith('/full.json')).length,fullRequests);
+    await mobile.getByText('1 visitor',{exact:true}).waitFor();
+    assert.equal(countWrites().length,1);
     await desktop.reload();
     await desktop.getByRole('button',{name:'Alternative'}).waitFor();
+    await desktop.getByText('2 visitors',{exact:true}).waitFor();
     assert.equal(await desktop.locator('#frames').evaluate(el=>getComputedStyle(el).flexDirection),'column');
 
     await admin.getByLabel('Replace PNG').first().setInputFiles('public/art/kuet-starter.png');
@@ -341,7 +347,7 @@ async function main() {
     console.log('50 distinct uploads passed with interrupted-save recovery; all 50 enabled gallery entries are available and thumbnails load on scroll.');
     await admin.getByRole('button',{name:'Sign out'}).click();
     await admin.getByRole('button',{name:'Continue with Google'}).waitFor();
-    console.log(JSON.stringify({shellMs,artworkMs,fullRequests,visitorWriteRequests:0}));
+    console.log(JSON.stringify({shellMs,artworkMs,fullRequests,visitorCounterWrites:countWrites().length,exportWriteRequests:0}));
     console.log('Browser flows passed against both Firebase emulators with a simulated Google identity.');
   } finally {
     if (browser) await browser.close();

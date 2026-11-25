@@ -186,6 +186,15 @@ async function realtime(path,{
   } finally { clearTimeout(idleTimer); }
 }
 
+export async function campaignVisitorCount(slug,increment = false) {
+  if (!validSlug(slug)) throw Error('Invalid campaign link.');
+  const path = 'visitors/'+slug;
+  const {data} = await realtime(path,increment ? {method:'PUT',data:{'.sv':{increment:1}}} : {});
+  if (data === null) return 0;
+  if (!Number.isSafeInteger(data) || data < 0) throw Error('Visitor count is unavailable.');
+  return data;
+}
+
 function artPath(slug,frame,version,variant) {
   if (!validSlug(slug) || !validId(frame) || !validId(version)) throw Error('Invalid artwork reference.');
   return 'art/'+slug+'/'+frame+'/'+version+(variant ? '/'+variant : '');
